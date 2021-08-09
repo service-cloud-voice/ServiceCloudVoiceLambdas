@@ -1,0 +1,17 @@
+*.DS_Store
+**/packaged.yaml
+**/node_modules
+**/.coverage
+**/coverage
+**/node_modules/
+**/package-lock.json
+lambdas/samconfig.toml
+.idea
+target
+lib
+aws-integration.iml
+.settings
+.classpath
+.project
+**/yarn.lock
+**/.gradle

@@ -1,0 +1,59 @@
+{
+  "name": "ServiceCloudVoice",
+  "version": "1.0.0",
+  "publishConfig": {
+    "registery": "https://nexus.soma.salesforce.com/nexus/content/groups/npm-all/"
+  },
+  "description": "Service Cloud Voice Lambda functions",
+  "homepage": "https://git.soma.salesforce.com/hvcc/aws-integration",
+  "keywords": [
+    "Service Cloud Voice",
+    "Lambda",
+    "scv"
+  ],
+  "author": "Salesforce.com",
+  "repository": {
+    "type": "git",
+    "url": "git@git.soma.salesforce.com:hvcc/aws-integration.git"
+  },
+  "engines": {
+    "node": ">= 8.12.0",
+    "yarn": ">= 1.16.0"
+  },
+  "scripts": {
+    "lint": "eslint --fix ./**/*.js ./**/*test.js",
+    "prettier": "prettier --config .prettyrc --write ./*.js",
+    "test": "jest --collect-coverage",
+    "clean": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +; find . -name 'coverage' -type d -prune -exec rm -rf '{}' +; find . -name '*.zip' -type f -prune -exec rm -rf '{}' +;"
+  },
+  "devDependencies": {
+    "eslint": "^5.16.0",
+    "eslint-config-airbnb-base": "^13.0.0",
+    "eslint-config-prettier": "^2.9.0",
+    "eslint-import-resolver-jest": "2.1.1",
+    "eslint-plugin-import": "^2.13.0",
+    "eslint-plugin-prettier": "^2.6.2",
+    "jest": "^24.9.0",
+    "prettier": "^1.13.7",
+    "rewire": "^4.0.1"
+  },
+  "jest": {
+    "clearMocks": true
+  },
+  "licenses": [
+    {
+      "type": "Apache-2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0"
+    }
+  ],
+  "dependencies": {
+    "aws-param-store": "^3.2.0",
+    "aws-sdk": "^2.573.0",
+    "axios": "^0.19.0",
+    "cfn-response": "^1.0.1",
+    "flat": "^5.0.2",
+    "jsonwebtoken": "^8.5.1",
+    "selfsigned": "^1.10.7",
+    "uuid": "^3.4.0"
+  }
+}
