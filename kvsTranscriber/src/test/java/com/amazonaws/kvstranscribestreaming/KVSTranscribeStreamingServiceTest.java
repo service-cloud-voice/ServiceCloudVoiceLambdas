@@ -16,9 +16,7 @@ import org.mockito.Mockito;
 import java.io.IOException;
 import java.io.InputStream;
 
-
 /**
- *
  * Unit tests for KVSTranscribeStreamingService
  *
  * @author nan.shao
@@ -32,17 +30,36 @@ public class KVSTranscribeStreamingServiceTest {
     
     @Test
     void handleRequestTest() {
-        try{
+        runTest(buildTranscriptReq());
+    }        
+
+    @Test
+    void handleCustomRequestTest() {
+        TranscriptionRequest request = buildTranscriptReq();
+        request.setVocabularyName("VocabName");
+        request.setVocabularyFilterName("VocabFilterName");
+        request.setVocabularyFilterMethod("MASK");
+        runTest(request);
+    } 
+
+    @Test
+    void handleMedicalRequestTest() {
+        TranscriptionRequest request = buildTranscriptReq();
+        request.setEngine("medical");
+        request.setSpecialty("ONCOLOGY");
+        runTest(request);
+    }  
+
+    private void runTest(TranscriptionRequest request) {
+        try {
             withEnvironmentVariable("APP_REGION", "us-east-1")
                     .and("TRANSCRIBE_REGION", "us-east-1")
                     .and("START_SELECTOR_TYPE", "sample-type")
-                    .execute(
-                            () -> {
+                    .execute(() -> {
                                 MockedStatic<Regions> regionsMockedStatic = Mockito.mockStatic(Regions.class);
                                 regions = mock(Regions.class);
                                 regionsMockedStatic.when(() -> Regions.fromName("us-east-1")).thenReturn(regions);
                                 
-                                TranscriptionRequest request = buildTranscriptReq();
                                 Context context = new TestContext();
 
                                 MockedStatic<AmazonCloudWatchClientBuilder> amazonCloudWatchClientBuilderMockedStatic = Mockito.mockStatic(AmazonCloudWatchClientBuilder.class);

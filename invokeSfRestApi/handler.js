@@ -55,9 +55,9 @@ exports.handler = async event => {
       result = dispatchSearch(sosl);
       break;
     }
-    case "sendEmail":
-      result = await api.sendEmail(
-        utils.getEmailFieldValuesFromConnectLambdaParams(
+    case "realtimeAlertEvent":
+      result = await api.sendRealtimeAlertEvent(
+        utils.getRealtimeAlertEventFieldValuesFromConnectLambdaParams(
           event.Details.Parameters
         )
       );

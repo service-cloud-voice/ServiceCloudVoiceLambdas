@@ -18,7 +18,7 @@ function buildResponse() {
 exports.handler = (event, context, callback) => {
   console.log("SCV - kvs_trigger.handler: function invoked");
 
-  let payload = "";
+  let payload = {};
   let languageCodeSelected = "en-US";
 
   if (
@@ -30,20 +30,38 @@ exports.handler = (event, context, callback) => {
 
   payload = {
     streamARN: event.Details.ContactData.MediaStreams.Customer.Audio.StreamARN,
-    startFragmentNum:
-      event.Details.ContactData.MediaStreams.Customer.Audio.StartFragmentNumber,
-    audioStartTimestamp:
-      event.Details.ContactData.MediaStreams.Customer.Audio.StartTimestamp,
+    startFragmentNum: event.Details.ContactData.MediaStreams.Customer.Audio.StartFragmentNumber,
+    audioStartTimestamp: event.Details.ContactData.MediaStreams.Customer.Audio.StartTimestamp,
     customerPhoneNumber: event.Details.ContactData.CustomerEndpoint.Address,
     voiceCallId: event.Details.ContactData.ContactId,
     languageCode: languageCodeSelected,
     // These default to true for backwards compatability purposes
-    streamAudioFromCustomer:
-      event.Details.ContactData.Attributes.streamAudioFromCustomer !== "false",
-    streamAudioToCustomer:
-      event.Details.ContactData.Attributes.streamAudioToCustomer !== "false",
-    instanceARN: event.Details.ContactData.InstanceARN
+    streamAudioFromCustomer: event.Details.ContactData.Attributes.streamAudioFromCustomer !== "false",
+    streamAudioToCustomer: event.Details.ContactData.Attributes.streamAudioToCustomer !== "false",
+    instanceARN: event.Details.ContactData.InstanceARN,
+    engine: event.Details.Parameters.engine || "standard" // valid inputs are "standard" (default) and "medical"
   };
+
+  const vocabularyName = event.Details.Parameters.vocabularyName || null;
+  const vocabularyFilterName = event.Details.Parameters.vocabularyFilterName || null;
+  const vocabularyFilterMethod = event.Details.Parameters.vocabularyFilterMethod || null;
+  const specialty = event.Details.Parameters.specialty || null;
+
+  if (vocabularyName != null) {
+    payload.vocabularyName = vocabularyName;
+  }
+
+  if (vocabularyFilterName != null) {
+    payload.vocabularyFilterName = vocabularyFilterName;
+  }
+  
+  if (vocabularyFilterMethod != null) {
+    payload.vocabularyFilterMethod = vocabularyFilterMethod;
+  }
+
+  if (specialty != null) {
+    payload.specialty = specialty; // for use with medical transcription
+  }
 
   const params = {
     // not passing in a ClientContext

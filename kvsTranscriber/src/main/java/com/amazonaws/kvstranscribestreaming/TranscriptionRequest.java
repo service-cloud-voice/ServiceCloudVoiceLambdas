@@ -2,6 +2,8 @@ package com.amazonaws.kvstranscribestreaming;
 
 import java.util.Optional;
 import software.amazon.awssdk.services.transcribestreaming.model.LanguageCode;
+import software.amazon.awssdk.services.transcribestreaming.model.Specialty;
+import software.amazon.awssdk.services.transcribestreaming.model.VocabularyFilterMethod;
 
 /**
  * <p>Copyright 2019 Amazon.com, Inc. or its affiliates. All Rights Reserved.</p>
@@ -30,6 +32,11 @@ public class TranscriptionRequest {
     boolean streamAudioFromCustomer = true;
     boolean streamAudioToCustomer = true;
     String instanceARN = null;
+    String engine = "standard";
+    Optional<String> vocabularyName = Optional.empty();
+    Optional<String> vocabularyFilterName = Optional.empty();
+    Optional<String> vocabularyFilterMethod = Optional.empty();
+    Optional<String> specialty = Optional.empty();
 
     public String getStreamARN() {
         return this.streamARN;
@@ -46,7 +53,7 @@ public class TranscriptionRequest {
     public void setStartFragmentNum(String startFragmentNum) {
         this.startFragmentNum = startFragmentNum;
     }
-    
+
     public long getAudioStartTimestamp() {
         return this.audioStartTimestamp;
     }
@@ -80,43 +87,98 @@ public class TranscriptionRequest {
             this.languageCode = Optional.of(languageCode);
         }
     }
-    
+
     public String getInstanceARN() {
-    	return this.instanceARN;
+        return this.instanceARN;
     }
 
     public void setInstanceARN(String instanceARN) {
-    	this.instanceARN = instanceARN;
-    }
-    
-    public void setStreamAudioFromCustomer(boolean enabled) {
-        streamAudioFromCustomer = enabled;
+        this.instanceARN = instanceARN;
     }
 
     public boolean isStreamAudioFromCustomer() {
-        return  streamAudioFromCustomer;
+        return this.streamAudioFromCustomer;
     }
 
-    public void setStreamAudioToCustomer(boolean enabled) {
-        streamAudioToCustomer = enabled;
+    public void setStreamAudioFromCustomer(boolean enabled) {
+        this.streamAudioFromCustomer = enabled;
     }
 
     public boolean isStreamAudioToCustomer() {
-        return  streamAudioToCustomer;
+        return this.streamAudioToCustomer;
+    }
+
+    public void setStreamAudioToCustomer(boolean enabled) {
+        this.streamAudioToCustomer = enabled;
+    }
+
+    public String getEngine() {
+        return this.engine;
+    }
+
+    public void setEngine(String engine) {
+        this.engine = engine.toLowerCase(); // lowercase to avoid errors later on
+    }
+
+    public Optional<String> getVocabularyName() {
+        return this.vocabularyName;
+    }
+
+    public void setVocabularyName(String vocabularyName) {
+        if ((vocabularyName != null) && (vocabularyName.length() > 0)) {
+            this.vocabularyName = Optional.of(vocabularyName);
+        }
+    }
+
+    public Optional<String> getVocabularyFilterName() {
+        return this.vocabularyFilterName;
+    }
+
+    public void setVocabularyFilterName(String vocabularyFilterName) {
+        if ((vocabularyFilterName != null) && (vocabularyFilterName.length() > 0)) {
+            this.vocabularyFilterName = Optional.of(vocabularyFilterName);
+        }
+    }
+
+    public Optional<String> getVocabularyFilterMethod() {
+        return this.vocabularyFilterMethod;
+    }
+
+    public void setVocabularyFilterMethod(String vocabularyFilterMethod) {
+        if ((vocabularyFilterMethod != null) && (vocabularyFilterMethod.length() > 0)) {
+            this.vocabularyFilterMethod = Optional.of(vocabularyFilterMethod.toLowerCase()); // lowercase to avoid errors later on
+        }
+    }
+
+    public Optional<String> getSpecialty() {
+        return this.specialty;
+    }
+
+    public void setSpecialty(String specialty) {
+        if ((specialty != null) && (specialty.length() > 0)) {
+            this.specialty = Optional.of(specialty);
+        }
     }
 
     public String toString() {
-        return String.format("streamARN=%s, startFragmentNum=%s, voiceCallId=%s, languageCode=%s, audioStartTimestamp=%s, streamAudioFromCustomer=%s, streamAudioToCustomer=%s",
-                getStreamARN(), getStartFragmentNum(), getVoiceCallId(), getLanguageCode(), getAudioStartTimestamp(), isStreamAudioFromCustomer(), isStreamAudioToCustomer());
+        return String.format("streamARN=%s, startFragmentNum=%s, voiceCallId=%s, languageCode=%s, audioStartTimestamp=%s, streamAudioFromCustomer=%s, streamAudioToCustomer=%s, engine=%s, vocabularyName=%s, vocabularyFilterName=%s, vocabularyFilterMethod=%s, specialty=%s",
+                getStreamARN(), getStartFragmentNum(), getVoiceCallId(), getLanguageCode(), getAudioStartTimestamp(), isStreamAudioFromCustomer(), isStreamAudioToCustomer(), getEngine(), getVocabularyName(), getVocabularyFilterName(), getVocabularyFilterMethod(), getSpecialty());
     }
 
     public void validate() throws IllegalArgumentException {
-        // language code is optional; if provided, it should be one of the values accepted by
-        // https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_StartStreamTranscription.html#API_streaming_StartStreamTranscription_RequestParameters
-        if (languageCode.isPresent()) {
-            if (!LanguageCode.knownValues().contains(LanguageCode.fromValue(languageCode.get()))) {
-                throw new IllegalArgumentException("Incorrect language code");
-            }
+        // acceptable values: https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_StartStreamTranscription.html#API_streaming_StartStreamTranscription_RequestParameters
+        if (languageCode.isPresent() && !LanguageCode.knownValues().contains(LanguageCode.fromValue(languageCode.get()))) {
+            throw new IllegalArgumentException("Language code " + languageCode.get() + " is invalid!");
+        }
+
+        // acceptable values: https://docs.aws.amazon.com/transcribe/latest/dg/streaming-filter-unwanted.html
+        if (vocabularyFilterMethod.isPresent() && !VocabularyFilterMethod.knownValues().contains(VocabularyFilterMethod.fromValue(vocabularyFilterMethod.get()))) {
+            throw new IllegalArgumentException("Vocabulary filter method " + vocabularyFilterMethod.get() + " is invalid!");
+        }
+
+        // acceptable values: https://sdk.amazonaws.com/java/api/latest/software/amazon/awssdk/services/transcribestreaming/model/Specialty.html
+        if (specialty.isPresent() && !Specialty.knownValues().contains(Specialty.fromValue(specialty.get()))) {
+            throw new IllegalArgumentException("Specialty " + specialty.get() + " is invalid!");
         }
     }
 }

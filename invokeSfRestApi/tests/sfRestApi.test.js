@@ -247,9 +247,9 @@ describe('invokeQueryEngine', () => {
     })
 })
 
-describe('sendEmail', ()=> {
+describe('sendRealtimeAlertEvent', ()=> {
 
-    it('sends email with erroneous input to the api', async () => {
+    it('sends realtime alert event with missing mandatory field', async () => {
         const error = {
             response: {
                 success: false,
@@ -257,8 +257,9 @@ describe('sendEmail', ()=> {
                 statusText: 'Bad Request',
                 data: [
                     {
-                        message: 'javax.mail.internet.AddressException: Unable to extract email address from: foobar.com',
-                        errorCode: 'EMAIL_NOT_PROCESSED_DUE_TO_PRIOR_ERROR'
+                        message: 'You must enter a value: AlertName',
+                        errorCode: 'REQUIRED_FIELD_MISSING',
+                        fields: ['AlertName']
                     }
                 ]
             }
@@ -270,25 +271,39 @@ describe('sendEmail', ()=> {
             success: false,
             status: 400,
             statusText: 'Bad Request',
-            errorMessage: 'javax.mail.internet.AddressException: Unable to extract email address from: foobar.com',
-            errorCode: 'EMAIL_NOT_PROCESSED_DUE_TO_PRIOR_ERROR'
+            errorMessage: 'You must enter a value: AlertName',
+            errorCode: 'REQUIRED_FIELD_MISSING'
         };
-        await expect(await api.sendEmail(({inputs: [{emailBody: 'Email body', emailAddresses: 'test@salesforce.com', senderType: 'CurrentUser', emailSubject: 'Alert email subject'}]}))).toEqual(responseData)
+        await expect(await api.sendRealtimeAlertEvent(({ AlertName:'lambda error', AlertDescription: 'errors in lambda invocation', Source: 'source', Severity: 'Critical', AlertInfo: 'alert info', AlertDateTime: '2021-10-18T10:34:24.000Z' }))).toEqual(responseData)
     });
 
-    it('sends email successfully with the api', async () => {
+    it('sends realtime alert platform event successfully', async () => {
         const data = {
-                    success: true,
-                    emailRFCCode: "&lt;Tg0dH000000000000000000000000000000000000000000000QW994200Eh2mxUkORqiUdUrczFH89g@sfdc.net&gt;"
+            success: true,
+            id: '0rexx0000000001AAA',
+            errors: [
+                {
+                    statusCode: 'OPERATION_ENQUEUED',
+                    message: 'f418b2b4-25bf-460e-b3c2-b895ddee7454',
+                    fields : [ ]
                 }
+            ]
+        }
 
         utils.getAccessToken.mockImplementationOnce(() => Promise.resolve('test1234'));
         axiosWrapper.apiEndpoint.mockImplementationOnce(() => Promise.resolve({"data":data}));
 
         const responseData = {
             success: true,
-            emailRFCCode: "&lt;Tg0dH000000000000000000000000000000000000000000000QW994200Eh2mxUkORqiUdUrczFH89g@sfdc.net&gt;"
+            id: '0rexx0000000001AAA',
+            errors: [
+                {
+                    statusCode: 'OPERATION_ENQUEUED',
+                    message: 'f418b2b4-25bf-460e-b3c2-b895ddee7454',
+                    fields : [ ]
+                }
+            ]
         };
-        await expect(await api.sendEmail(({ to: [ 'foobar@salesforce.com' ], cc: [], bcc: [], subject: 'subject', body: 'plaintext body' }))).toEqual(responseData)
+        await expect(await api.sendRealtimeAlertEvent(({ AlertName:'lambda error', AlertDescription: 'errors in lambda invocation', Source: 'source', Severity: 'Critical', AlertInfo: 'alert info', AlertDateTime: '2021-10-18T10:34:24.000Z' }))).toEqual(responseData)
     });
 })
