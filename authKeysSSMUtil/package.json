@@ -1,0 +1,23 @@
+{
+  "name": "authKeysSSMUtil",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "license" : "BSD-3-Clause",
+  "dependencies": {
+    "aws-param-store": "^3.2.0",
+    "cfn-response": "^1.0.1",
+    "selfsigned": "^1.10.7"
+  },
+  "devDependencies": {
+    "jest": "^24.9.0",
+    "aws-sdk": "^2.573.0"
+  },
+  "scripts": {
+    "test": "jest --collect-coverage"
+  },
+  "jest": {
+    "clearMocks": true,
+    "modulePaths": ["../layers/authKeysSSMUtilFunctionLayer/nodejs/node_modules/"]
+  }
+}
