@@ -90,17 +90,21 @@ async function updateRecord(objectApiName, recordId, fieldValues) {
   }
 }
 
-async function sendEmail(fieldValues) {
+async function sendRealtimeAlertEvent(fieldValues) {
   try {
     const response = await sendRequest(
-        "post",
-        "/customeralert/email",
-        fieldValues,
-        {"Content-Type": "application/json", "X-Chatter-Entity-Encoding": false}
+      "post",
+      "/sobjects/RealtimeAlertEvent",
+      fieldValues,
+      { "Content-Type": "application/json"}
     );
+
     return {
-      success: true,
-      emailRFCCode: response.data.emailRFCCode
+      success: response.data.success,
+      id: response.data.id,
+      // successful response will also have error object with  "statusCode" : "OPERATION_ENQUEUED" and message with GUID
+      // https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_publish_api.htm
+      errors: response.data.errors
     };
   } catch (e) {
     return buildError(e);
@@ -146,5 +150,5 @@ module.exports = {
   updateRecord,
   queryRecord,
   searchRecord,
-  sendEmail
+  sendRealtimeAlertEvent
 };

@@ -59,9 +59,17 @@ exports.handler = async event => {
       result = await api.createVoiceCall(voiceCallFieldValues);
       break;
     case "executeOmniFlow": {
+      let dialedNumberParam;
+      if (
+        event.Details.ContactData &&
+        event.Details.ContactData.SystemEndpoint
+      ) {
+        dialedNumberParam = event.Details.ContactData.SystemEndpoint.Address;
+      }
       const payload = {
         flowDevName: event.Details.Parameters.flowDevName,
         fallbackQueue: event.Details.Parameters.fallbackQueue,
+        dialedNumber: dialedNumberParam,
         flowInputParameters: utils.constructFlowInputParams(
           event.Details.Parameters
         )
@@ -74,7 +82,7 @@ exports.handler = async event => {
     }
     case "cancelOmniFlowExecution":
       result = await api.cancelOmniFlowExecution(
-        event.Details.ContactData.ContactId
+        event.Details.Parameters.ContactId
       );
       break;
     default:

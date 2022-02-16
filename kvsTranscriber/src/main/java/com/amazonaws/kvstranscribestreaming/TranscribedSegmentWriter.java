@@ -7,6 +7,8 @@ import software.amazon.awssdk.services.connect.ConnectClient;
 import software.amazon.awssdk.services.connect.model.UpdateContactAttributesRequest;
 import software.amazon.awssdk.services.transcribestreaming.model.Result;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent;
+import software.amazon.awssdk.services.transcribestreaming.model.MedicalResult;
+import software.amazon.awssdk.services.transcribestreaming.model.MedicalTranscriptEvent;
 import java.time.Instant;
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -50,7 +52,7 @@ public class TranscribedSegmentWriter {
     private static final String PRIVATE_KEY_END_DECORATION_LINE = "-----END RSA PRIVATE KEY-----";
     private static final String PRIVATE_KEY_REXP_TO_REPLACE = "\\s+";
     private static final String END_USER = "END_USER";
-    private static final String HUMAN_AGENT = "HUMAN_AGENT";
+    private static final String VIRTUAL_AGENT = "VIRTUAL_AGENT";
 
     private String voiceCallId;
     private boolean isFromCustomer;
@@ -68,7 +70,7 @@ public class TranscribedSegmentWriter {
         this.instanceARN = instanceARN;
     }
 
-    public void sendRealTimeTranscript(TranscriptEvent transcriptEvent) {
+    public void sendStandardRealTimeTranscript(TranscriptEvent transcriptEvent) {
         List<Result> results = transcriptEvent.transcript().results();
         if (results.size() > 0) {
             Result result = results.get(0);
@@ -78,11 +80,33 @@ public class TranscribedSegmentWriter {
                 String message = result.alternatives().get(0).transcript();
                 String messageId = result.resultId();
                 
-                // audioStartTimeStamp:  passed from JS lambda, which in millisecond (long, like 1584048369054)
+                // audioStartTimeStamp: passed from JS lambda, which in millisecond (long, like 1584048369054)
                 // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333) 
                 // we need to create startTime and endTime as timestamp in mill-seconds   
-                long startTime = Math.round(this.audioStartTimestamp + result.startTime()*1000); 
-                long endTime = Math.round(this.audioStartTimestamp + result.endTime()*1000); 
+                long startTime = Math.round(this.audioStartTimestamp + result.startTime() * 1000); 
+                long endTime = Math.round(this.audioStartTimestamp + result.endTime() * 1000); 
+
+                // send message
+                sendMessage(message, messageId, startTime, endTime);
+            }
+        }
+    }
+
+    public void sendMedicalRealTimeTranscript(MedicalTranscriptEvent transcriptEvent) {
+        List<MedicalResult> results = transcriptEvent.transcript().results();
+        if (results.size() > 0) {
+            MedicalResult result = results.get(0);
+            
+            // save the result when it is not partial
+            if (!result.isPartial() && result.alternatives().size() > 0 && !result.alternatives().get(0).transcript().isEmpty()) {
+                String message = result.alternatives().get(0).transcript();
+                String messageId = result.resultId();
+                
+                // audioStartTimeStamp: passed from JS lambda, which in millisecond (long, like 1584048369054)
+                // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333) 
+                // we need to create startTime and endTime as timestamp in mill-seconds   
+                long startTime = Math.round(this.audioStartTimestamp + result.startTime() * 1000); 
+                long endTime = Math.round(this.audioStartTimestamp + result.endTime() * 1000); 
 
                 // send message
                 sendMessage(message, messageId, startTime, endTime);
@@ -100,7 +124,7 @@ public class TranscribedSegmentWriter {
         try {
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.sendMessage", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Send Messages " + messageId, null);
             // get sender type and sender
-            String senderType = this.isFromCustomer ? END_USER : HUMAN_AGENT;
+            String senderType = this.isFromCustomer ? END_USER : VIRTUAL_AGENT;
             String sender = this.isFromCustomer ? customerPhoneNumber : voiceCallId;
             
             // get JWT token
@@ -121,6 +145,7 @@ public class TranscribedSegmentWriter {
             con.setRequestProperty("Authorization", "Bearer " + jwtToken);
             con.setRequestProperty("Content-Type", "application/json; utf-8");
             con.setRequestProperty("Accept", "application/json");
+            con.setRequestProperty("Telephony-Provider-Name", "amazon-connect");
             con.setDoOutput(true);
                         
             try (OutputStream os = con.getOutputStream()) {

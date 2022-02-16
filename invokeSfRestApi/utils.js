@@ -130,19 +130,13 @@ function getSObjectFieldValuesFromConnectLambdaParams(params) {
   return fieldValues;
 }
 
-const EMAIL_FIELD_NAMES = ["to", "cc", "bcc", "subject", "body", "templateId"];
-
-function getEmailFieldValuesFromConnectLambdaParams(params) {
+function getRealtimeAlertEventFieldValuesFromConnectLambdaParams(params) {
   const fieldValues = {};
-
-  Object.entries(params).forEach(entry => {
+  Object.entries(params).forEach((entry) => {
     const key = entry[0];
-
-    if (!EMAIL_FIELD_NAMES.includes(key)) {
-      return;
+    if (key !== "methodName") {
+      fieldValues[key] = entry[1];
     }
-
-    fieldValues[key] = entry[1];
   });
   return fieldValues;
 }
@@ -152,5 +146,5 @@ module.exports = {
   getAccessToken,
   formatObjectApiName,
   getSObjectFieldValuesFromConnectLambdaParams,
-  getEmailFieldValuesFromConnectLambdaParams
+  getRealtimeAlertEventFieldValuesFromConnectLambdaParams
 };

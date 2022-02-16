@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "handler.js",
-  "license" : "BSD-3-Clause",
+  "license": "BSD-3-Clause",
   "dependencies": {
     "aws-sdk": "^2.573.0",
     "axios": "0.21.1",
@@ -21,6 +21,8 @@
   },
   "jest": {
     "clearMocks": true,
-    "modulePaths": ["../layers/invokeTelephonyIntegrationApiFunctionLayer/nodejs/node_modules/"]
+    "modulePaths": [
+      "../layers/invokeTelephonyIntegrationApiFunctionLayer/nodejs/node_modules/"
+    ]
   }
 }

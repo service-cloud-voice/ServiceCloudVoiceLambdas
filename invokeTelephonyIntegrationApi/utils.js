@@ -39,7 +39,7 @@ async function generateJWT(params) {
   const signOptions = {
     issuer: orgId,
     subject: callCenterApiName,
-    expiresIn,
+    expiresIn:  expiresIn,
     algorithm: "RS256",
     jwtid: uuid()
   };
@@ -69,7 +69,7 @@ function getCallAttributes(rawCallAttributes) {
 }
 
 /**
- * Filter flow input parameters to be included in API payload based on prefix and strip prefix
+ * Filter flow input parameters to be included in API payload based on prefix and strip prefix.
  *
  * @param {object} rawFlowInputParams - Flow Input Parameters
  *
