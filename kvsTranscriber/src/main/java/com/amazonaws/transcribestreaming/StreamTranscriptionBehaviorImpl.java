@@ -3,8 +3,9 @@ package com.amazonaws.transcribestreaming;
 import com.amazonaws.kvstranscribestreaming.TranscribedSegmentWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionResponse;
+import software.amazon.awssdk.services.transcribestreaming.model.TranscribeStreamingResponse;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent;
+import software.amazon.awssdk.services.transcribestreaming.model.MedicalTranscriptEvent;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptResultStream;
 
 /**
@@ -40,16 +41,19 @@ public class StreamTranscriptionBehaviorImpl implements StreamTranscriptionBehav
     }
 
     @Override
-    public void onStream(TranscriptResultStream e) {
-        // EventResultStream has other fields related to the timestamp of the transcripts in it.
-        // Please refer to the javadoc of TranscriptResultStream for more details 
-        segmentWriter.sendRealTimeTranscript((TranscriptEvent) e);
+    public void onStandardStream(TranscriptEvent e) {
+        segmentWriter.sendStandardRealTimeTranscript(e);
     }
 
     @Override
-    public void onResponse(StartStreamTranscriptionResponse r) {
+    public void onMedicalStream(MedicalTranscriptEvent e) {
+        segmentWriter.sendMedicalRealTimeTranscript(e);
+    }
+
+    @Override
+    public void onResponse(TranscribeStreamingResponse r) {
         logger.info(String.format("%d Received Initial response from Transcribe. Request Id: %s",
-                System.currentTimeMillis(), r.requestId()));
+                new Object[] { Long.valueOf(System.currentTimeMillis()), r.responseMetadata().requestId() }));
     }
 
     @Override

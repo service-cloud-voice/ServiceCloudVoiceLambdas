@@ -12,15 +12,20 @@ import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.transcribestreaming.TranscribeStreamingAsyncClient;
 import software.amazon.awssdk.services.transcribestreaming.model.AudioStream;
+import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent;
+import software.amazon.awssdk.services.transcribestreaming.model.MedicalTranscriptEvent;
+import software.amazon.awssdk.services.transcribestreaming.model.TranscribeStreamingRequest;
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionRequest;
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionResponseHandler;
+import software.amazon.awssdk.services.transcribestreaming.model.StartMedicalStreamTranscriptionRequest;
+import software.amazon.awssdk.services.transcribestreaming.model.StartMedicalStreamTranscriptionResponseHandler;
+import software.amazon.awssdk.services.transcribestreaming.model.BadRequestException;
 import software.amazon.awssdk.core.client.config.SdkAdvancedClientOption;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
-import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -51,7 +56,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
     private int sleepTime = DEFAULT_MAX_SLEEP_TIME_MILLS;
     private final TranscribeStreamingAsyncClient client;
     private final MetricsUtil metricsUtil;
-    List<Class<?>> nonRetriableExceptions = Arrays.asList(SdkClientException.class);
+    List<Class<?>> nonRetriableExceptions = Arrays.asList(SdkClientException.class, BadRequestException.class);
 
     private static final Logger logger = LoggerFactory.getLogger(TranscribeStreamingRetryClient.class);
 
@@ -133,18 +138,18 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
      * @return Completable future to handle stream response.
      */
 
-    public CompletableFuture<Void> startStreamTranscription(final StartStreamTranscriptionRequest request,
+    public CompletableFuture<Void> startStreamTranscription(final TranscribeStreamingRequest request,
                                                             final Publisher<AudioStream> publisher,
                                                             final StreamTranscriptionBehavior responseHandler,
-                                                            final String channel) {
+                                                            final String channel,
+                                                            final String engine) {
 
         Validate.notNull(request);
         Validate.notNull(publisher);
         Validate.notNull(responseHandler);
 
         CompletableFuture<Void> finalFuture = new CompletableFuture<>();
-
-        recursiveStartStream(rebuildRequestWithSession(request), publisher, responseHandler, finalFuture, 0, channel);
+        recursiveStartStream(request, publisher, responseHandler, finalFuture, 0, channel, engine);
 
         return finalFuture;
     }
@@ -158,17 +163,28 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
      * @param finalFuture     final future to finish on completing the chained futures.
      * @param retryAttempt    Current attempt number
      */
-    private void recursiveStartStream(final StartStreamTranscriptionRequest request,
+    private void recursiveStartStream(final TranscribeStreamingRequest request,
                                       final Publisher<AudioStream> publisher,
                                       final StreamTranscriptionBehavior responseHandler,
                                       final CompletableFuture<Void> finalFuture,
-                                      final int retryAttempt, final String channel) {
-        CompletableFuture<Void> result = client.startStreamTranscription(request, publisher,
-                getResponseHandler(responseHandler));
+                                      final int retryAttempt,
+                                      final String channel,
+                                      final String engine) {
+        CompletableFuture<Void> result;
+        if (engine.equals("medical")) {
+            result = client.startMedicalStreamTranscription(
+                (StartMedicalStreamTranscriptionRequest)request,
+                publisher,
+                getMedicalResponseHandler(responseHandler));
+        } else {
+            result = client.startStreamTranscription(
+                (StartStreamTranscriptionRequest)request,
+                publisher,
+                getStandardResponseHandler(responseHandler));
+        }
         result.whenComplete((r, e) -> {
             if (e != null) {
-                logger.debug("Error occurred on channel " + channel +" : " + e.getMessage());
-                e.printStackTrace();
+                logger.debug("Error occurred on channel " + channel + " : " + e.getMessage());
 
                 if (retryAttempt <= maxRetries && isExceptionRetriable(e)) {
                     logger.debug("Retriable error occurred and will be retried.");
@@ -180,7 +196,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
                         finalFuture.completeExceptionally(e);
                     }
                     logger.debug("Making retry attempt: " + (retryAttempt + 1));
-                    recursiveStartStream(request, publisher, responseHandler, finalFuture, retryAttempt + 1, channel);
+                    recursiveStartStream(request, publisher, responseHandler, finalFuture, retryAttempt + 1, channel, engine);
                 } else {
                     metricsUtil.recordMetric("TranscribeStreamError", 1);
                     logger.error("Encountered unretriable exception or ran out of retries.", e);
@@ -195,40 +211,60 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
         });
     }
 
-    private StartStreamTranscriptionRequest rebuildRequestWithSession(StartStreamTranscriptionRequest request) {
-        return StartStreamTranscriptionRequest.builder()
-                .languageCode(request.languageCode())
-                .mediaEncoding(request.mediaEncoding())
-                .mediaSampleRateHertz(request.mediaSampleRateHertz())
-                .sessionId(UUID.randomUUID().toString())
-                .build();
-    }
-
     /**
      * StartStreamTranscriptionResponseHandler implements subscriber of transcript stream
      * Output is printed to standard output
      */
-    private StartStreamTranscriptionResponseHandler getResponseHandler(StreamTranscriptionBehavior transcriptionBehavior) {
+    private StartStreamTranscriptionResponseHandler getStandardResponseHandler(StreamTranscriptionBehavior transcriptionBehavior) {
         final StartStreamTranscriptionResponseHandler build = StartStreamTranscriptionResponseHandler.builder()
                 .onResponse(r -> {
                     transcriptionBehavior.onResponse(r);
                 })
                 .onError(e -> {
-                    //Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
-                    logger.info("Reached on error but doing nothing" + e);
+                    // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
+                    logger.info("Reached onError.");
                 })
                 .onComplete(() -> {
-                    //Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
-                    logger.info("Reached on complete.");
+                    // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
+                    logger.info("Reached onComplete.");
                 })
                 .subscriber(event -> {
                     try {
-                        transcriptionBehavior.onStream(event);
+                        transcriptionBehavior.onStandardStream((TranscriptEvent)event);
                     }
                     // We swallow any exception occurred while processing the TranscriptEvent and continue transcribing
                     // Transcribe errors will however cause the future to complete exceptionally and we'll retry (if applicable)
-                    catch (Exception e) {
+                    catch (Exception ignored) {}
+                })
+                .build();
+        return build;
+    }
+
+    /**
+     * StartMedicalStreamTranscriptionResponseHandler implements subscriber of transcript stream
+     * Output is printed to standard output
+     */
+    private StartMedicalStreamTranscriptionResponseHandler getMedicalResponseHandler(StreamTranscriptionBehavior transcriptionBehavior) {
+        final StartMedicalStreamTranscriptionResponseHandler build = StartMedicalStreamTranscriptionResponseHandler.builder()
+                .onResponse(r -> {
+                    transcriptionBehavior.onResponse(r);
+                })
+                .onError(e -> {
+                    // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
+                    logger.info("Reached onError.");
+                })
+                .onComplete(() -> {
+                    // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
+                    logger.info("Reached onComplete.");
+                })
+                .subscriber(event -> {
+                    logger.info("Reached subscriber: ", event);
+                    try {
+                        transcriptionBehavior.onMedicalStream((MedicalTranscriptEvent)event);
                     }
+                    // We swallow any exception occurred while processing the MedicalTranscriptEvent and continue transcribing
+                    // Transcribe errors will however cause the future to complete exceptionally and we'll retry (if applicable)
+                    catch (Exception ignored) {}
                 })
                 .build();
         return build;

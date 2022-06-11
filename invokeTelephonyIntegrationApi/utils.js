@@ -69,7 +69,7 @@ function getCallAttributes(rawCallAttributes) {
 }
 
 /**
- * Filter flow input parameters to be included in API payload based on prefix and strip prefix
+ * Filter flow input parameters to be included in API payload based on prefix and strip prefix.
  *
  * @param {object} rawFlowInputParams - Flow Input Parameters
  *

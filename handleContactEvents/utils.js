@@ -5,7 +5,8 @@ function isDisconnectedEventForAbandonedCall(event) {
     event["detail-type"] === "Amazon Connect Contact Event" &&
     event.detail !== null &&
     event.detail !== undefined &&
-    (event.detail.initiationMethod === "INBOUND" || event.detail.initiationMethod === "TRANSFER") &&
+    (event.detail.initiationMethod === "INBOUND" ||
+      event.detail.initiationMethod === "TRANSFER") &&
     event.detail.eventType === "DISCONNECTED" &&
     event.detail.queueInfo !== null &&
     event.detail.queueInfo !== undefined &&

@@ -1,5 +1,5 @@
-const SCVLoggingUtil = require("./SCVLoggingUtil");
 const aws = require("aws-sdk");
+const SCVLoggingUtil = require("./SCVLoggingUtil");
 
 const lambda = new aws.Lambda();
 const utils = require("./utils");
@@ -34,15 +34,15 @@ exports.handler = async event => {
       const updatePromise = updateVoiceCallRecord(voiceCall);
 
       promises.push(updatePromise);
-      
+
       updatePromise.then(response => {
-       SCVLoggingUtil.info(
-         "updateVoiceCallRecord response",
-         SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-         "CTRSyncLambda handler",
-         response
-       );
-       });
+        SCVLoggingUtil.info(
+          "updateVoiceCallRecord response",
+          SCVLoggingUtil.EVENT_TYPE.VOICECALL,
+          "CTRSyncLambda handler",
+          response
+        );
+      });
     }
   });
 
