@@ -1,6 +1,5 @@
 const selfsigned = require("selfsigned");
 const awsParamStore = require("aws-param-store");
-const response = require("cfn-response");
 
 function putSSMParameter(name, value) {
   awsParamStore.putParameterSync(name, value, "SecureString");
@@ -24,7 +23,7 @@ function generatePrivatePublicKeyPair(requestDetails) {
   return pems;
 }
 
-exports.handler = async (event, context) => {
+exports.handler = async event => {
   const parameters = event.ResourceProperties.Parameters;
 
   const requestType = parameters.RequestType;
@@ -62,8 +61,6 @@ exports.handler = async (event, context) => {
       break;
     }
   }
-
-  if (context.url) response.send(event, context, response.SUCCESS, {});
 
   return ret;
 };

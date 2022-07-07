@@ -9,6 +9,7 @@ const generateJWTParams = {
   callCenterApiName: config.callCenterApiName,
   expiresIn: config.tokenValidFor
 };
+const vendorFQN = "amazon-connect";
 
 /**
  * Create conversation states and records at Salesforce side to represent an Amazon Connect contact.
@@ -38,7 +39,8 @@ async function createVoiceCall(fieldVals) {
     .post("/voiceCalls", fieldValues, {
       headers: {
         Authorization: `Bearer ${jwt}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN
       }
     })
     .then(response => response)
@@ -77,16 +79,15 @@ async function createVoiceCall(fieldVals) {
 async function updateVoiceCall(contactId, fieldValues) {
   const jwt = await utils.generateJWT(generateJWTParams);
 
-  const patchResponse = await axiosWrapper.scrtEndpoint.patch(
-    `/voiceCalls/${contactId}`,
-    fieldValues,
-    {
+  const patchResponse = await axiosWrapper.scrtEndpoint
+    .patch(`/voiceCalls/${contactId}`, fieldValues, {
       headers: {
         Authorization: `Bearer ${jwt}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN
       }
     })
-  .then(response => response)
+    .then(response => response)
     .catch(error => {
       let context = {};
       if (error.response) {
@@ -105,7 +106,7 @@ async function updateVoiceCall(contactId, fieldValues) {
         "Error updating VoiceCall record",
         context
       );
-      throw new Error("Error updating VoiceCall record." + context);
+      throw new Error(`Error updating VoiceCall record.${context}`);
     });
 
   return patchResponse.data;
@@ -125,7 +126,8 @@ async function executeOmniFlow(contactId, payload) {
     .patch(`/voiceCalls/${contactId}/omniFlow`, payload, {
       headers: {
         Authorization: `Bearer ${jwt}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN
       }
     })
     .then(response => response)

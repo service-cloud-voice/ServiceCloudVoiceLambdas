@@ -20,8 +20,12 @@ import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.services.transcribestreaming.model.AudioStream;
 import software.amazon.awssdk.services.transcribestreaming.model.LanguageCode;
+import software.amazon.awssdk.services.transcribestreaming.model.Specialty;
+import software.amazon.awssdk.services.transcribestreaming.model.VocabularyFilterMethod;
 import software.amazon.awssdk.services.transcribestreaming.model.MediaEncoding;
+import software.amazon.awssdk.services.transcribestreaming.model.TranscribeStreamingRequest;
 import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionRequest;
+import software.amazon.awssdk.services.transcribestreaming.model.StartMedicalStreamTranscriptionRequest;
 
 import java.io.*;
 import java.nio.file.Path;
@@ -34,6 +38,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Date;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -67,11 +72,11 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
             request.validate();
 
             startKVSToTranscribeStreaming(request.getInstanceARN(), request.getStreamARN(), request.getStartFragmentNum(), request.getVoiceCallId(), request.getLanguageCode(),
-                    request.getAudioStartTimestamp(), request.getCustomerPhoneNumber(), request.isStreamAudioFromCustomer(), request.isStreamAudioToCustomer());
+                    request.getAudioStartTimestamp(), request.getCustomerPhoneNumber(), request.isStreamAudioFromCustomer(), request.isStreamAudioToCustomer(), request.getEngine(),
+                    request.getVocabularyName(), request.getVocabularyFilterName(), request.getVocabularyFilterMethod(), request.getSpecialty());
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "End Handle Request", loggingContext);
             
             return "{ \"result\": \"Success\" }";
-
         } catch (Exception e) {
          	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), loggingContext);
             return "{ \"result\": \"Failed\" }";
@@ -89,7 +94,8 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
      * @throws Exception
      */
     private void startKVSToTranscribeStreaming(String instanceARN, String streamARN, String startFragmentNum, String voiceCallId, Optional<String> languageCode,
-                                               long audioStartTimestamp, String customerPhoneNumber, boolean isStreamAudioFromCustomerEnabled, boolean isStreamAudioToCustomerEnabled) throws Exception {
+                                               long audioStartTimestamp, String customerPhoneNumber, boolean isStreamAudioFromCustomerEnabled, boolean isStreamAudioToCustomerEnabled, String engine,
+                                               Optional<String> vocabularyName, Optional<String> vocabularyFilterName, Optional<String> vocabularyFilterMethod, Optional<String> specialty) throws Exception {
     	SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START KVS Transcribe Streaming", null);
         fromCustomerSegmentWriter = new TranscribedSegmentWriter(instanceARN, voiceCallId, true, audioStartTimestamp, customerPhoneNumber);
         toCustomerSegmentWriter = new TranscribedSegmentWriter(instanceARN, voiceCallId, false, audioStartTimestamp, customerPhoneNumber);
@@ -115,14 +121,14 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
             if (kvsStreamTrackObjectFromCustomer != null) {
             	SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getStartStreamingTranscriptionFuture", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Get Transcribing Future for FROM_CUSTOMER stream", null);
                 fromCustomerResult = getStartStreamingTranscriptionFuture(kvsStreamTrackObjectFromCustomer,
-                        languageCode, voiceCallId, client, fromCustomerSegmentWriter, KVSUtils.TrackName.AUDIO_FROM_CUSTOMER.getName());
+                        languageCode, voiceCallId, client, fromCustomerSegmentWriter, KVSUtils.TrackName.AUDIO_FROM_CUSTOMER.getName(), engine, vocabularyName, vocabularyFilterName, vocabularyFilterMethod, specialty);
                 SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getStartStreamingTranscriptionFuture", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Get Transcribing Future for FROM_CUSTOMER stream", null);
             }
 
             if (kvsStreamTrackObjectToCustomer != null) {
             	SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getStartStreamingTranscriptionFuture", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Get Transcribing Future for TO_CUSTOMER stream", null);
                 toCustomerResult = getStartStreamingTranscriptionFuture(kvsStreamTrackObjectToCustomer,
-                        languageCode, voiceCallId, client, toCustomerSegmentWriter, KVSUtils.TrackName.AUDIO_TO_CUSTOMER.getName());
+                        languageCode, voiceCallId, client, toCustomerSegmentWriter, KVSUtils.TrackName.AUDIO_TO_CUSTOMER.getName(), engine, vocabularyName, vocabularyFilterName, vocabularyFilterMethod, specialty);
                 SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getStartStreamingTranscriptionFuture", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Get Transcribing Future for TO_CUSTOMER stream", null);
             }
 
@@ -169,13 +175,19 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
     }
 
 
-    private CompletableFuture<Void> getStartStreamingTranscriptionFuture(KVSStreamTrackObject kvsStreamTrackObject, Optional<String> languageCode,
-                                                                         String contactId, TranscribeStreamingRetryClient client,
-                                                                         TranscribedSegmentWriter transcribedSegmentWriter,
-                                                                         String channel) {
-    	return client.startStreamTranscription(
-                // since we're definitely working with telephony audio, we know that's 8 kHz
-                getRequest(8000, languageCode),
+    private CompletableFuture<Void> getStartStreamingTranscriptionFuture(KVSStreamTrackObject kvsStreamTrackObject, Optional<String> languageCodeOptional, String contactId, TranscribeStreamingRetryClient client,
+                                                                         TranscribedSegmentWriter transcribedSegmentWriter, String channel, String engine, Optional<String> vocabularyName,
+                                                                         Optional<String> vocabularyFilterName, Optional<String> vocabularyFilterMethod, Optional<String> specialty) {
+    	String languageCode = languageCodeOptional.isPresent() ? languageCodeOptional.get() : LanguageCode.EN_US.toString();
+        TranscribeStreamingRequest request;
+        if (engine.equals("medical")) {
+            request = getMedicalRequest(languageCode, specialty, vocabularyName);
+        } else {
+            request = getStandardRequest(languageCode, vocabularyName, vocabularyFilterName, vocabularyFilterMethod);
+        }
+
+        return client.startStreamTranscription(
+                request,
                 new KVSAudioStreamPublisher(
                         kvsStreamTrackObject.getStreamingMkvReader(),
                         contactId,
@@ -183,11 +195,10 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
                         kvsStreamTrackObject.getFragmentVisitor(),
                         kvsStreamTrackObject.getTrackName()),
                 new StreamTranscriptionBehaviorImpl(transcribedSegmentWriter),
-                channel
+                channel,
+                engine
         );
     }
-
-    
 
     /**
      * @return AWS credentials to be used to connect to s3 (for fetching and uploading audio) and KVS
@@ -206,19 +217,50 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
     }
 
     /**
-     * Build StartStreamTranscriptionRequestObject containing required parameters to open a streaming transcription
-     * request, such as audio sample rate and language spoken in audio
+     * Build StartStreamTranscriptionRequest containing required parameters to open a streaming transcription request
      *
-     * @param mediaSampleRateHertz sample rate of the audio to be streamed to the service in Hertz
-     * @param languageCode the language code to be used for Transcription (optional; see https://docs.aws.amazon.com/transcribe/latest/dg/API_streaming_StartStreamTranscription.html#API_streaming_StartStreamTranscription_RequestParameters )
+     * @param languageCode the language code to be used for transcription
+     * @param vocabularyName (optional) the name of a custom vocabulary to improve transcription
+     * @param vocabularyFilterName (optional) the name of list of words to be filtered from the transcription
+     * @param vocabularyFilterMethod (optional) how words should be filted, used with vocabularyFilterName
      * @return StartStreamTranscriptionRequest to be used to open a stream to transcription service
      */
-    private static StartStreamTranscriptionRequest getRequest(Integer mediaSampleRateHertz, Optional <String> languageCode) {
-        return StartStreamTranscriptionRequest.builder()
-                .languageCode(languageCode.isPresent() ? languageCode.get() : LanguageCode.EN_US.toString())
-                .mediaEncoding(MediaEncoding.PCM)
-                .mediaSampleRateHertz(mediaSampleRateHertz)
-                .build();
+    private static StartStreamTranscriptionRequest getStandardRequest(String languageCode, Optional<String> vocabularyName, Optional<String> vocabularyFilterName, Optional<String> vocabularyFilterMethod) {
+        StartStreamTranscriptionRequest.Builder builder = StartStreamTranscriptionRequest.builder();
+        builder.languageCode(languageCode);
+        builder.mediaEncoding(MediaEncoding.PCM);
+        builder.mediaSampleRateHertz(8000);
+        builder.sessionId(UUID.randomUUID().toString());
+        if (vocabularyName.isPresent()) {
+            builder.vocabularyName(vocabularyName.get());
+        }
+        if (vocabularyFilterName.isPresent()) {
+            builder.vocabularyFilterName(vocabularyFilterName.get());
+            builder.vocabularyFilterMethod(VocabularyFilterMethod.fromValue(vocabularyFilterMethod.isPresent() ? vocabularyFilterMethod.get() : VocabularyFilterMethod.MASK.toString()));
+        }
+        return builder.build();
+    }
+
+    /**
+     * Build StartMedicalStreamTranscriptionRequest containing required parameters to open a streaming transcription request
+     *
+     * @param languageCode the language code to be used for transcription
+     * @param specialty (optional) the area of medicine being talked about
+     * @param vocabularyName (optional) the name of a custom vocabulary to improve transcription
+     * @return StartMedicalStreamTranscriptionRequest to be used to open a stream to transcription service
+     */
+    private static StartMedicalStreamTranscriptionRequest getMedicalRequest(String languageCode, Optional<String> specialty, Optional<String> vocabularyName) {
+        StartMedicalStreamTranscriptionRequest.Builder builder = StartMedicalStreamTranscriptionRequest.builder();
+        builder.languageCode(languageCode);
+        builder.mediaEncoding(MediaEncoding.PCM);
+        builder.mediaSampleRateHertz(8000);
+        builder.specialty(Specialty.fromValue(String.valueOf(specialty.isPresent() ? specialty.get() : Specialty.PRIMARYCARE.toString())));
+        builder.type("CONVERSATION");
+        builder.sessionId(UUID.randomUUID().toString());
+        if (vocabularyName.isPresent()){
+            builder.vocabularyName(vocabularyName.get());
+        }
+        return builder.build();
     }
 
     /**

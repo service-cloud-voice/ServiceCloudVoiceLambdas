@@ -1,6 +1,8 @@
 package com.amazonaws.transcribestreaming;
 
-import software.amazon.awssdk.services.transcribestreaming.model.StartStreamTranscriptionResponse;
+import software.amazon.awssdk.services.transcribestreaming.model.TranscriptEvent;
+import software.amazon.awssdk.services.transcribestreaming.model.MedicalTranscriptEvent;
+import software.amazon.awssdk.services.transcribestreaming.model.TranscribeStreamingResponse;
 import software.amazon.awssdk.services.transcribestreaming.model.TranscriptResultStream;
 
 /**
@@ -33,16 +35,23 @@ public interface StreamTranscriptionBehavior {
     /**
      * Defines how to respond to the Transcript result stream.
      *
-     * @param e The TranscriptResultStream event
+     * @param e The TranscriptEvent event
      */
-    void onStream(TranscriptResultStream e);
+    void onStandardStream(TranscriptEvent e);
+
+    /**
+     * Defines how to respond to the Transcript result stream.
+     *
+     * @param e The MedicalTranscriptEvent event
+     */
+    void onMedicalStream(MedicalTranscriptEvent e);
 
     /**
      * Defines what to do on initiating a stream connection with the service.
      *
-     * @param r StartStreamTranscriptionResponse
+     * @param r TranscribeStreamingResponse
      */
-    void onResponse(StartStreamTranscriptionResponse r);
+    void onResponse(TranscribeStreamingResponse r);
 
     /**
      * Defines what to do on stream completion

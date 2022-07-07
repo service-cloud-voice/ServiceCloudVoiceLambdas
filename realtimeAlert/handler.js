@@ -20,8 +20,12 @@ function getSnsEventPayload(snsMessage) {
         Description: snsMessage.AlarmDescription,
         Source: `Cloudwatch Alarm from account ${snsMessage.AWSAccountId}`,
         Severity: getSeverity(snsMessage),
-        Payload: `${snsMessage.NewStateReason}Trigger condition: ${JSON.stringify(snsMessage.Trigger)}`,
-        EventDateTime: (snsMessage.StateChangeTime) ? new Date(snsMessage.StateChangeTime).toISOString() : new Date().toISOString()
+        Payload: `${
+          snsMessage.NewStateReason
+        }Trigger condition: ${JSON.stringify(snsMessage.Trigger)}`,
+        EventDateTime: snsMessage.StateChangeTime
+          ? new Date(snsMessage.StateChangeTime).toISOString()
+          : new Date().toISOString()
       }
     }
   };
@@ -44,7 +48,7 @@ function getCloudwatchEventPayload() {
   };
   return payload;
 }
-const sendEvent = async (event) => {
+const sendEvent = async event => {
   let eventPayload;
   if (event.Records && event.Records[0].EventSource === "aws:sns") {
     const snsMessage = JSON.parse(event.Records[0].Sns.Message);
@@ -62,7 +66,7 @@ const sendEvent = async (event) => {
 };
 
 // --------------- Main handler -----------------------
-exports.handler = async (event) => {
+exports.handler = async event => {
   const result = await sendEvent(event);
   const sendRealtimeAlertEventResult = JSON.parse(result.Payload);
   if (sendRealtimeAlertEventResult.success) {

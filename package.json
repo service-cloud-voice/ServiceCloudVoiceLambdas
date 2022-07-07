@@ -30,10 +30,10 @@
     "eslint": "^5.16.0",
     "eslint-config-airbnb-base": "^13.0.0",
     "eslint-config-prettier": "^2.9.0",
-    "eslint-import-resolver-jest": "2.1.1",
+    "eslint-import-resolver-jest": "3.0.2",
     "eslint-plugin-import": "^2.13.0",
     "eslint-plugin-prettier": "^2.6.2",
-    "jest": "^24.9.0",
+    "jest": "28.1.0",
     "prettier": "^1.13.7",
     "rewire": "^4.0.1"
   },
@@ -49,11 +49,10 @@
   "dependencies": {
     "aws-param-store": "^3.2.0",
     "aws-sdk": "^2.573.0",
-    "axios": "^0.19.0",
-    "cfn-response": "^1.0.1",
+    "axios": "0.27.2",
     "flat": "^5.0.2",
     "jsonwebtoken": "^8.5.1",
-    "selfsigned": "^1.10.7",
+    "selfsigned": "2.0.1",
     "uuid": "^3.4.0"
   }
 }
