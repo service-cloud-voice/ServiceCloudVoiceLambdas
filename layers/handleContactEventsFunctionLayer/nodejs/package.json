@@ -1,0 +1,9 @@
+{
+  "name": "handleContactEventsFunctionLayer",
+  "version": "1.0.0",
+  "description": "The package dependencies required by the handleContactEvent Lambda function.",
+  "main": "",
+  "dependencies": {
+    "aws-sdk": "2.814.0"
+  }
+}
