@@ -1,0 +1,13 @@
+{
+  "name": "invokeTelephonyIntegrationApiFunctionLayer",
+  "version": "1.0.0",
+  "description": "The package dependencies required by the invokeTelephonyIntegrationApi Lambda function.",
+  "main": "",
+  "dependencies": {
+    "aws-sdk": "2.814.0",
+    "axios": "0.27.2",
+    "axios-logger": "2.5.0",
+    "jsonwebtoken": "8.5.1",
+    "uuid": "3.4.0"
+  }
+}

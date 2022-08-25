@@ -1,0 +1,9 @@
+{
+  "name": "kvsConsumerTriggerFunctionLayer",
+  "version": "1.0.0",
+  "description": "The package dependencies required by the kvsConsumerTrigger Lambda function.",
+  "main": "",
+  "dependencies": {
+    "aws-sdk": "2.814.0"
+  }
+}
