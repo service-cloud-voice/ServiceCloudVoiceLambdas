@@ -5,7 +5,7 @@
   "main": "handler.js",
   "license" : "BSD-3-Clause",
   "dependencies": {
-    "aws-sdk": "^2.573.0"
+    "aws-sdk": "2.814.0"
   },
   "devDependencies": {
     "jest": "28.1.0"
