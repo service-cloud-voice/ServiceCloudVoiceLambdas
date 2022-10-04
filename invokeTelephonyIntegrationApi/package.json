@@ -5,7 +5,7 @@
   "main": "handler.js",
   "license": "BSD-3-Clause",
   "dependencies": {
-    "aws-sdk": "^2.573.0",
+    "aws-sdk": "^2.814.0",
     "axios": "0.27.2",
     "axios-logger": "2.5.0",
     "jsonwebtoken": "^8.5.1",
