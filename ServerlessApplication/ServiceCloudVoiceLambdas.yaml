@@ -1,0 +1,1022 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  aws-integration/lambdas
+  SAM Template for aws-integration/lambdas
+  
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 5
+
+Parameters: 
+  SalesforceOrgId:
+    Type: String
+    AllowedPattern: "^00D[a-zA-Z0-9]{12}$"
+    Description: Salesforce Organization ID
+  TelephonyIntegrationAuthPrivateKeySSMParamName:
+    Type: String
+    Default: telephony-integration-auth-private-key
+    Description: The name of the SSM parameter used to store the telephony integration auth private key.
+  CallCenterApiName:
+    Type: String
+    Default: ServiceCloudVoice
+    Description: Salesforce CallCenter API name
+  ScrtEndpointUrl:
+    Type: String
+    Default: salesforce-scrt-endpoint-url
+    Description: Salesforce realtime server endpoint URL
+  SalesforceRestApiAuthPrivateKeySSMParamName:
+    Type: String
+    Default: salesforce-rest-api-auth-private-key
+    Description: The name of the SSM parameter used to store the Salesforce REST API auth private key.
+  SalesforceRestApiAuthConsumerKeySSMParamName:
+    Type: String
+    Default: salesforce-rest-api-auth-consumer-key
+    Description: The name of the SSM parameter used to store the Salesforce REST API auth consumer key.
+  SalesforceRestApiAccessTokenSSMParamName:
+    Type: String
+    Default: salesforce-rest-api-access-token
+    Description: The name of the SSM parameter used to store the Salesforce REST API auth consumer key.
+  SalesforceRestApiAudienceSSMParamName:
+    Type: String
+    Default: salesforce-rest-api-audience
+    Description: The name of the SSM parameter used to store the Salesforce REST API audience value.
+  SalesforceRestApiSubjectSSMParamName:
+    Type: String
+    Default: salesforce-rest-api-subject
+    Description: The name of the SSM parameter used to store the Salesforce REST API subject value.
+  ConnectInstanceId:
+    Type: String
+    Default: service-cloud-voice-contact-center-id
+    Description: Connect Instance Id.
+  PermissionBoundaryARN:
+    Default: ''
+    Type: String
+    Description: IAM Permission Boundary ARN as defined by the admin
+
+Conditions:
+  CreatePermissionBoundary: 
+   !Not [!Equals [!Ref PermissionBoundaryARN, '']]
+
+Resources:
+  ctrDataSyncFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: ctrDataSyncFunctionLayer
+      Description: ctrDataSyncFunction npm package
+      ContentUri: layers/ctrDataSyncFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  handleContactEventsFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: handleContactEventsFunctionLayer
+      Description: handleContactEventsFunction npm package
+      ContentUri: layers/handleContactEventsFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  authKeysSSMUtilFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: authKeysSSMUtilFunctionLayer
+      Description: authKeysSSMUtilFunction npm package
+      ContentUri: layers/authKeysSSMUtilFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  invokeSalesforceRestApiFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: invokeSalesforceRestApiFunctionLayer
+      Description: invokeSalesforceRestApiFunction npm package
+      ContentUri: layers/invokeSfRestApiFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  invokeTelephonyIntegrationApiFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: invokeTelephonyIntegrationApiFunctionLayer
+      Description: invokeTelephonyIntegrationApiFunction npm package
+      ContentUri: layers/invokeTelephonyIntegrationApiFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  kvsConsumerTriggerFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: kvsConsumerTriggerFunctionLayer
+      Description: kvsConsumerTriggerFunction npm package
+      ContentUri: layers/kvsConsumerTriggerFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  InvokeTelephonyIntegrationApiFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: invokeTelephonyIntegrationApi/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          SALESFORCE_ORG_ID: !Sub ${SalesforceOrgId}
+          PRIVATE_KEY_PARAM_NAME: !Sub ${TelephonyIntegrationAuthPrivateKeySSMParamName}
+          CALL_CENTER_API_NAME: !Sub ${CallCenterApiName}
+          SCRT_ENDPOINT_BASE: !Sub ${ScrtEndpointUrl}
+          LOG_LEVEL: "info"
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - 'ssm:Describe*'
+              - 'ssm:Get*'
+              - 'ssm:List*'
+            Resource:
+              - '*'
+      Layers:
+        - Ref: invokeTelephonyIntegrationApiFunctionLayer
+
+  InvokeSalesforceRestApiFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: invokeSfRestApi/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub ${SalesforceRestApiAuthPrivateKeySSMParamName}
+          CONSUMER_KEY_PARAM_NAME: !Sub ${SalesforceRestApiAuthConsumerKeySSMParamName}
+          ACCESS_TOKEN_PARAM_NAME: !Sub ${SalesforceRestApiAccessTokenSSMParamName}
+          SUBJECT: !Sub ${SalesforceRestApiSubjectSSMParamName}
+          AUDIENCE: !Sub ${SalesforceRestApiAudienceSSMParamName}
+          SALESFORCE_AUTH_ENDPOINT: https://login.salesforce.com/services/oauth2/token
+          SALESFORCE_REST_API_ENDPOINT_BASE: https://login.salesforce.com/services/data/v54.0
+          LOG_LEVEL: "info"
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - 'ssm:Describe*'
+              - 'ssm:Get*'
+              - 'ssm:Put*'
+              - 'ssm:List*'
+            Resource:
+              - '*'
+      Layers:
+        - Ref: invokeSalesforceRestApiFunctionLayer
+
+  CTRDataSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ctrDataSync/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Events:
+        Stream:
+          Type: Kinesis
+          Properties:
+            Stream: !GetAtt CTRStream.Arn
+            BatchSize: 100
+            StartingPosition: TRIM_HORIZON
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - 'kinesis:DescribeStream'
+              - 'kinesis:DescribeStreamSummary'
+              - 'kinesis:GetRecords'
+              - 'kinesis:GetShardIterator'
+              - 'kinesis:ListShards'
+              - 'kinesis:ListStreams'
+              - 'kinesis:SubscribeToShard'
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'lambda:InvokeFunction'
+            Resource:
+              - '*'
+      Environment:
+        Variables:
+          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+          LOG_LEVEL: "info"
+      Layers:
+        - Ref: ctrDataSyncFunctionLayer
+  CTRStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+
+  HandleContactEventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: handleContactEvents/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      FunctionName: !Sub "${CallCenterApiName}-HandleContactEventsFunction"
+      AutoPublishAlias: active
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+              - 'lambda:InvokeFunction'
+            Resource:
+              - '*'
+      Environment:
+        Variables:
+          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+          LOG_LEVEL: "info"
+      Layers:
+        - Ref: handleContactEventsFunctionLayer
+
+  kvsTranscriber:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: kvsTranscriber/
+      Handler: com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService::handleRequest
+      AutoPublishAlias: active
+      Role: !GetAtt AIPoweredSpeechAnalyticsKvsTranscribeRole.Arn
+      Runtime: java8.al2
+      MemorySize: 512
+      Timeout: 900
+      Environment:
+        Variables:
+          APP_REGION: !Ref "AWS::Region"
+          TRANSCRIBE_REGION: !Ref "AWS::Region"
+          START_SELECTOR_TYPE: "NOW"
+          SALESFORCE_ORG_ID: !Sub ${SalesforceOrgId}
+          PRIVATE_KEY_PARAM_NAME: !Sub ${TelephonyIntegrationAuthPrivateKeySSMParamName}
+          CALL_CENTER_API_NAME: !Sub ${CallCenterApiName}
+          SCRT_ENDPOINT_BASE: !Sub ${ScrtEndpointUrl}
+          AUDIENCE: https://scrt.salesforce.com
+          LOG_LEVEL: "info"
+
+  kvsConsumerTrigger:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: kvsConsumerTrigger/
+      Handler: kvs_trigger.handler
+      AutoPublishAlias: active
+      Role: !GetAtt AIPoweredSpeechAnalyticsKvsTriggerRole.Arn
+      Runtime: nodejs14.x
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          transcriptionFunction: !GetAtt kvsTranscriber.Arn
+          LOG_LEVEL: "info"
+      Layers:
+        - Ref: kvsConsumerTriggerFunctionLayer
+
+  AIPoweredSpeechAnalyticsKvsTranscribeRole:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+        - id: F3
+          reason: transcribe:* do not support resource-level permissions and kinesisvideo streams are dynamically created and therefore cannot be specificed directly
+        - id: W11
+          reason: transcribe:* do not support resource-level permissions and kinesisvideo streams are dynamically created and therefore cannot be specificed directly
+    Properties:
+      PermissionsBoundary:
+       !If [CreatePermissionBoundary, !Ref PermissionBoundaryARN, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: kvs-streaming-transcribe-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "transcribe:DeleteTranscriptionJob"
+                  - "transcribe:DeleteMedicalTranscriptionJob"
+                  - "transcribe:GetTranscriptionJob"
+                  - "transcribe:GetMedicalTranscriptionJob"
+                  - "transcribe:GetVocabulary"
+                  - "transcribe:GetMedicalVocabulary"
+                  - "transcribe:GetVocabularyFilter"
+                  - "transcribe:ListTranscriptionJobs"
+                  - "transcribe:ListMedicalTranscriptionJobs"
+                  - "transcribe:ListVocabularies"
+                  - "transcribe:ListMedicalVocabularies"
+                  - "transcribe:ListVocabularyFilters"
+                  - "transcribe:StartStreamTranscription"
+                  - "transcribe:StartMedicalStreamTranscription"
+                  - "transcribe:StartTranscriptionJob"
+                  - "transcribe:StartMedicalTranscriptionJob"
+                Resource: 
+                  - "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "kinesisvideo:Describe*"
+                  - "kinesisvideo:Get*"
+                  - "kinesisvideo:List*"
+                Resource: 
+                  - "*"
+              - Effect: Allow
+                Action:
+                  - 'ssm:Describe*'
+                  - 'ssm:Get*'
+                  - 'ssm:List*'
+                Resource:
+                  - '*'
+              - Effect: Allow
+                Action:
+                  - 'connect:UpdateContactAttributes'
+                Resource:
+                  - '*'    
+
+  AIPoweredSpeechAnalyticsKvsTriggerRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+       !If [CreatePermissionBoundary, !Ref PermissionBoundaryARN, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      Policies:
+        -
+          PolicyName: kvs-streaming-trigger-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "lambda:InvokeFunction"
+                  - "lambda:InvokeAsync"
+                Resource:
+                  - "*"
+
+  ContactLensStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+
+  ContactLensConsumerFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: ContactLensConsumerFunctionLayer
+      Description: ContactLensConsumerFunction node modules
+      ContentUri: layers/contactLensConsumerFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
+  ContactLensConsumerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: contactLensConsumer/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${ScrtEndpointUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          LOG_LEVEL: "info"
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Action:
+              - "kinesis:DescribeStream"
+              - "kinesis:DescribeStreamSummary"
+              - "kinesis:GetRecords"
+              - "kinesis:GetShardIterator"
+              - "kinesis:ListShards"
+              - "kinesis:ListStreams"
+              - "kinesis:SubscribeToShard"
+              - "logs:CreateLogGroup"
+              - "logs:CreateLogStream"
+              - "logs:PutLogEvents"
+              - "lambda:InvokeFunction"
+              - "ssm:Describe*"
+              - "ssm:Get*"
+              - "ssm:List*"
+            Resource:
+              - '*'
+      Layers:
+        - Ref: ContactLensConsumerFunctionLayer
+
+  ContactLensConsumerFunctionStream:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      ParallelizationFactor: 10
+      BatchSize: 1
+      MaximumBatchingWindowInSeconds: 1
+      FunctionName:
+        Ref: ContactLensConsumerFunction
+      EventSourceArn:
+        Fn::GetAtt:
+          - ContactLensStream
+          - Arn
+      StartingPosition: TRIM_HORIZON
+      BisectBatchOnFunctionError: true
+      MaximumRetryAttempts: 1
+
+  ContactEventsRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      EventPattern: {
+          "source":["aws.connect"],
+          "detail-type": ["Amazon Connect Contact Event"],
+          "detail" : {"eventType": ["DISCONNECTED"]}
+        }
+      Name: !Sub "${CallCenterApiName}-ContactEventsRule"
+      State: "ENABLED"
+      Targets:
+        - Arn: !Ref HandleContactEventsFunction.Alias
+          Id: "HandleContactEventsFunctionId"
+
+  ContactEventsRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref HandleContactEventsFunction.Alias
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceAccount: !Sub ${AWS::AccountId}      
+      SourceArn:
+        Fn::GetAtt:
+          - "ContactEventsRule"
+          - "Arn"     
+
+  ScheduledRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "The event rule to keep Lambda warm"
+      ScheduleExpression: "rate(5 minutes)"
+      State: "ENABLED"
+      Name: !Sub "${CallCenterApiName}-ScheduledRule"
+      Targets: 
+        - Arn: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+          Id: "InvokeTelephonyIntegrationApiFunctionId"
+
+  ScheduledRulePermission: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: 
+        Fn::GetAtt: 
+          - "ScheduledRule"
+          - "Arn"
+
+  RealtimeAlertLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: realtimeAlert/
+      Environment:
+        Variables:
+          INVOKE_SALESFORCE_REST_API_ARN: !GetAtt InvokeSalesforceRestApiFunction.Arn
+          LOG_LEVEL: "info"
+
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version"
+      Role: !GetAtt RealtimeAlertRoleResource.Arn
+      Timeout: 15
+      Runtime: nodejs14.x
+      FunctionName: !Sub "${CallCenterApiName}-RealtimeAlert"
+      Layers:
+        - !Ref RealtimeAlertLayer
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref RealtimeAlertAlarmSnsTopic
+
+  RealtimeAlertLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: RealtimeAlertFunctionLayer
+      Description: Realtime alert Function layer
+      ContentUri: layers/realtimeAlertFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+    Metadata:
+      BuildMethod: nodejs14.x
+
+  RealtimeAlertRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [CreatePermissionBoundary, !Ref PermissionBoundaryARN, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RealtimeAlertRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - connect:Get*
+                  - connect:Describe*
+                  - connect:List*
+                  - ssm:Get*
+                  - ssm:Put*
+                  - ssm:Describe*
+                  - lambda:InvokeFunction
+                Resource:
+                  - "*"
+                Effect: Allow
+      RoleName: !Sub "${CallCenterApiName}-RealtimeAlertRole"
+
+  RealtimeAlertAlarmSnsTopic:
+    Type: AWS::SNS::Topic
+    DependsOn:
+      - RealtimeAlertLambda
+    Properties:
+      TopicName:
+        !Sub "${CallCenterApiName}-RealtimeAlertTopic"
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !GetAtt RealtimeAlertLambda.Arn
+
+  RealtimeAlertLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref RealtimeAlertLambda.Alias
+      Principal: sns.amazonaws.com
+
+  RealtimeAlertAlarmSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: "sns:Publish"
+            Resource: !Ref RealtimeAlertAlarmSnsTopic
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+            Condition:
+              ArnLike:
+                AWS:SourceArn: !Sub 'arn:aws:*:*:${AWS::AccountId}:*'
+
+  ConcurrentCallsPercentageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Connect ${CallCenterApiName}-ConcurrentCallsPercentage"
+      AlarmDescription: !Sub "The number of concurrent active voice calls in the connect instance ${ConnectInstanceId} during the evaluation period was greater than threshold."
+      Namespace: AWS/Connect
+      MetricName: ConcurrentCallsPercentage
+      Statistic: Maximum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 0.8
+      EvaluationPeriods: 10
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ConnectInstanceId
+        - Name: MetricGroup
+          Value: VoiceCalls
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  CTRDataSyncFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${CTRDataSyncFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${CTRDataSyncFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CTRDataSyncFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  CTRDataSyncFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${CTRDataSyncFunction}Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${CTRDataSyncFunction} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CTRDataSyncFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  InvokeTelephonyIntegrationApiFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${CallCenterApiName}-InvokeTelephonyIntegrationApiFunction Errors"
+      AlarmDescription: !Sub "The number of invocations of ${InvokeTelephonyIntegrationApiFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeTelephonyIntegrationApiFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  InvokeTelephonyIntegrationApiFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${CallCenterApiName}-InvokeTelephonyIntegrationApiFunction Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${InvokeTelephonyIntegrationApiFunction} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeTelephonyIntegrationApiFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  kvsConsumerTriggerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsConsumerTrigger} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${kvsConsumerTrigger} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsConsumerTrigger
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  kvsConsumerTriggerThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsConsumerTrigger} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${kvsConsumerTrigger} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsConsumerTrigger
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  kvsTranscriberErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsTranscriber} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${kvsTranscriber} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsTranscriber
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  kvsTranscriberThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsTranscriber} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${kvsTranscriber} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsTranscriber
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  InvokeSalesforceRestApiFunctionFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${InvokeSalesforceRestApiFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${InvokeSalesforceRestApiFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeSalesforceRestApiFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  InvokeSalesforceRestApiFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${InvokeSalesforceRestApiFunction} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${InvokeSalesforceRestApiFunction} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeSalesforceRestApiFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  HandleContactEventsFunctionNameFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${HandleContactEventsFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${HandleContactEventsFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HandleContactEventsFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  HandleContactEventsFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${HandleContactEventsFunction} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${HandleContactEventsFunction} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HandleContactEventsFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  ContactLensConsumerFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${ContactLensConsumerFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${ContactLensConsumerFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactLensConsumerFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  ContactLensConsumerFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${ContactLensConsumerFunction}  Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${ContactLensConsumerFunction}  that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactLensConsumerFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  ServiceCloudVoiceLambdaDashboard:
+    Type: "AWS::CloudWatch::Dashboard"
+    Properties:
+      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunction}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunction}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunction}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriber}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriber}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTrigger}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTrigger}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunction}"}}, {"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunction}"}}]}'
+      DashboardName: !Sub '${CallCenterApiName}-ServiceCloudVoiceLambdaDashboard'
+  ServiceCloudVoiceConnectDashboard:
+    Type: "AWS::CloudWatch::Dashboard"
+    Properties:
+      DashboardBody: !Sub '{"widgets":[{"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ToInstancePacketLossRate","Participant","Agent","Type of Connection","WebRTC","Instance ID","${ConnectInstanceId}","Stream Type","Voice"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ToInstancePacketLossRate"}},{"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallsBreachingConcurrencyQuota","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallsBreachingConcurrencyQuota"}},{"type":"metric","x":0,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","MissedCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"MissedCalls"}},{"type":"metric","x":6,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","MisconfiguredPhoneNumbers","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"MisconfiguredPhoneNumbers"}},{"type":"metric","x":6,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ThrottledCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ThrottledCalls"}},{"type":"metric","x":0,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallRecordingUploadError","InstanceId","${ConnectInstanceId}","MetricGroup","CallRecordings"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallRecordingUploadError"}},{"type":"metric","x":12,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallsPerInterval","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallsPerInterval"}},{"type":"metric","x":12,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ConcurrentCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ConcurrentCalls"}},{"type":"metric","x":12,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ConcurrentCallsPercentage","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ConcurrentCallsPercentage"}}]}'
+      DashboardName: !Sub '${CallCenterApiName}-ServiceCloudVoiceConnectDashboard'
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  InvokeTelephonyIntegrationApiFunction:
+    Description: "InvokeTelephonyIntegrationApi Lambda Function ARN"
+    Value: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+  InvokeTelephonyIntegrationApiFunctionIamRole:
+    Description: "Implicit IAM Role created for InvokeTelephonyIntegrationApiFunction"
+    Value: !GetAtt InvokeTelephonyIntegrationApiFunctionRole.Arn
+  InvokeSalesforceRestApiFunction:
+    Description: "InvokeSalesforceRestApi Lambda Function ARN"
+    Value: !GetAtt InvokeSalesforceRestApiFunction.Arn
+  InvokeSalesforceRestApiFunctionIamRole:
+    Description: "Implicit IAM Role created for InvokeSalesforceRestApiFunction"
+    Value: !GetAtt InvokeSalesforceRestApiFunctionRole.Arn
+  HandleContactEventsFunction:
+    Description: "HandleContactEvents Lambda Function ARN"
+    Value: !GetAtt HandleContactEventsFunction.Arn
+  HandleContactEventsFunctionIamRole:
+    Description: "Implicit IAM Role created for HandleContactEventsFunction"
+    Value: !GetAtt HandleContactEventsFunctionRole.Arn
+  CTRDataSyncFunction:
+    Description: "CTRDataSync Lambda Function ARN"
+    Value: !GetAtt CTRDataSyncFunction.Arn
+  CTRDataSyncFunctionIamRole:
+    Description: "Implicit IAM Role created for CTRDataSyncFunction"
+    Value: !GetAtt CTRDataSyncFunctionRole.Arn
+  CTRStreamARN:
+    Description: "CTR Kinesis Stream ARN"
+    Value: !GetAtt CTRStream.Arn
+  transcriptionTrigger:
+    Description: "AWS Lambda Function to start (asynchronous) streaming transcription; it is expected to be called by the Amazon Connect Contact Flow."
+    Value: !Ref kvsConsumerTrigger
+  transcriptionTriggerARN:
+    Description:  ARN for the TranscriptionTriggerFunction
+    Value: !GetAtt kvsConsumerTrigger.Arn
+  CallTranscription:
+    Description:  "AWS Lambda Function to get audio from Kinesis Video Streams and use Amazon Transcribe to get text for the caller audio.  Should be invoked by TranscriptionTrigger and write results to the transcriptSegments table."
+    Value: !Ref kvsTranscriber
+  ContactLensStreamARN:
+    Description: "Contact Lens Kinesis Stream ARN"
+    Value: !GetAtt ContactLensStream.Arn
+  ContactLensConsumerFunction:
+    Description: "Contact Lens Consumer Lambda Function ARN"
+    Value: !GetAtt ContactLensConsumerFunction.Arn
+  ContactLensConsumerFunctionIamRole:
+    Description: "Implicit IAM Role created for ContactLensConsumerFunction"
+    Value: !GetAtt ContactLensConsumerFunctionRole.Arn
+
+
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: ServiceCloudVoiceLambdas
+    Description: Service Cloud Voice Serverless Application
+    Author: Salesforce Service Cloud Voice
+    SpdxLicenseId: BSD-3-Clause
+    LicenseUrl: ../LICENSE.md
+    ReadmeUrl: ../APP_README.md
+    HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
+    SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
+    SemanticVersion: 10.0.0
