@@ -9,37 +9,42 @@ function cancelOmniFlowExecution(contactId) {
     Details: {
       Parameters: {
         methodName: "cancelOmniFlowExecution",
-        ContactId: contactId
-      }
-    }
+        ContactId: contactId,
+      },
+    },
   };
   const params = {
     FunctionName: process.env.INVOKE_TELEPHONY_INTEGRATION_API_ARN,
-    Payload: JSON.stringify(payload)
+    Payload: JSON.stringify(payload),
   };
 
   return lambda.invoke(params).promise();
 }
 
-exports.handler = async event => {
+exports.handler = async (event) => {
   const clearPsrPromises = [];
+  SCVLoggingUtil.debug({
+    category: "handleContactEvent.handler",
+    message: "Received event",
+    context: event,
+  });
   if (utils.isDisconnectedEventForAbandonedCall(event)) {
-    SCVLoggingUtil.info(
-      "handleContactEvents.handler",
-      SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-      "Amazon Connect Contact Disconnected Event",
-      event
-    );
+    SCVLoggingUtil.info({
+      category: "handleContactEvents.handler",
+      eventType: "VOICECALL",
+      message: "Amazon Connect Contact Disconnected Event",
+      context: event,
+    });
 
     const clearPsrPromise = cancelOmniFlowExecution(event.detail.contactId);
     clearPsrPromises.push(clearPsrPromise);
-    clearPsrPromise.then(response => {
-      SCVLoggingUtil.info(
-        "cancelOmniFlowExecution response",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "handleContactEventsLambda handler",
-        response
-      );
+    clearPsrPromise.then((response) => {
+      SCVLoggingUtil.info({
+        message: "cancelOmniFlowExecution response",
+        eventType: "VOICECALL",
+        category: "handleContactEventsLambda handler",
+        context: response,
+      });
     });
   }
 

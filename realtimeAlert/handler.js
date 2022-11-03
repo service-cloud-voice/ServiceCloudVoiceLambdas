@@ -25,9 +25,9 @@ function getSnsEventPayload(snsMessage) {
         }Trigger condition: ${JSON.stringify(snsMessage.Trigger)}`,
         EventDateTime: snsMessage.StateChangeTime
           ? new Date(snsMessage.StateChangeTime).toISOString()
-          : new Date().toISOString()
-      }
-    }
+          : new Date().toISOString(),
+      },
+    },
   };
   return payload;
 }
@@ -42,13 +42,13 @@ function getCloudwatchEventPayload() {
         Source: "alert source goes here",
         Severity: "Warning",
         Payload: "some info",
-        EventDateTime: new Date().toISOString()
-      }
-    }
+        EventDateTime: new Date().toISOString(),
+      },
+    },
   };
   return payload;
 }
-const sendEvent = async event => {
+const sendEvent = async (event) => {
   let eventPayload;
   if (event.Records && event.Records[0].EventSource === "aws:sns") {
     const snsMessage = JSON.parse(event.Records[0].Sns.Message);
@@ -59,30 +59,45 @@ const sendEvent = async event => {
   }
   const params = {
     FunctionName: process.env.INVOKE_SALESFORCE_REST_API_ARN,
-    Payload: JSON.stringify(eventPayload)
+    Payload: JSON.stringify(eventPayload),
   };
 
+  SCVLoggingUtil.debug({
+    category: "realtimeAlert.handler.handler",
+    message: "Invoke lambda with params",
+    context: params,
+  });
   return lambda.invoke(params).promise();
 };
 
 // --------------- Main handler -----------------------
-exports.handler = async event => {
+exports.handler = async (event) => {
+  SCVLoggingUtil.debug({
+    category: "realtimeAlert.handler.handler",
+    message: "Received event",
+    context: event,
+  });
   const result = await sendEvent(event);
+  SCVLoggingUtil.debug({
+    category: "realtimeAlert.handler.handler",
+    message: "Sent Event response",
+    context: result,
+  });
   const sendRealtimeAlertEventResult = JSON.parse(result.Payload);
   if (sendRealtimeAlertEventResult.success) {
-    SCVLoggingUtil.info(
-      "realtimeAlert.handler.handler",
-      SCVLoggingUtil.EVENT_TYPE.MONITORING,
-      JSON.stringify(sendRealtimeAlertEventResult),
-      null
-    );
+    SCVLoggingUtil.info({
+      category: "realtimeAlert.handler.handler",
+      eventType: "MONITORING",
+      message: JSON.stringify(sendRealtimeAlertEventResult),
+      context: null,
+    });
   } else {
-    SCVLoggingUtil.error(
-      "realtimeAlert.handler.handler",
-      SCVLoggingUtil.EVENT_TYPE.MONITORING,
-      JSON.stringify(sendRealtimeAlertEventResult),
-      null
-    );
+    SCVLoggingUtil.error({
+      category: "realtimeAlert.handler.handler",
+      eventType: "MONITORING",
+      message: JSON.stringify(sendRealtimeAlertEventResult),
+      context: null,
+    });
     throw new Error(`${sendRealtimeAlertEventResult.errorMessage}`);
   }
 };

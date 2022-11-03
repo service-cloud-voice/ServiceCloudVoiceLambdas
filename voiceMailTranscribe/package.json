@@ -1,11 +1,11 @@
 {
-  "name": "handleContactEvents",
+  "name": "voiceMailTranscribe",
   "version": "1.0.0",
   "description": "",
   "main": "handler.js",
   "license" : "BSD-3-Clause",
   "dependencies": {
-    "aws-sdk": "2.814.0",
+    "aws-sdk": "2.1172.0",
     "winston": "3.2.1"
   },
   "scripts": {
@@ -16,6 +16,6 @@
   },
   "jest": {
     "clearMocks": true,
-    "modulePaths": ["../layers/handleContactEventsFunctionLayer/nodejs/node_modules/"]
+    "modulePaths": ["../layers/voiceMailTranscribeFunctionLayer/nodejs/node_modules/"]
   }
 }

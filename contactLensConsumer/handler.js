@@ -1,16 +1,29 @@
 const utils = require("./utils");
 const api = require("./telephonyIntegrationApi");
 const signalConfig = require("./signalConfig");
+const SCVLoggingUtil = require("./SCVLoggingUtil");
 
-exports.handler = async event => {
+exports.handler = async (event) => {
   // TODO consider looking at the timestamp of the event and if it's too late then ignore
   const promises = [];
-
+  SCVLoggingUtil.debug({
+    category: "contactLensConsumer.handler",
+    message: "Received event",
+    context: event,
+  });
   if (event && event.Records) {
-    event.Records.forEach(record => {
-      const kinesisPayload = JSON.parse(
-        Buffer.from(record.kinesis.data, "base64").toString("ascii")
-      );
+    event.Records.forEach((record) => {
+      SCVLoggingUtil.debug({
+        category: "contactLensConsumer.handler",
+        message: "Processing event record",
+        context: record,
+      });
+      const kinesisPayload = utils.parseData(record.kinesis.data);
+      SCVLoggingUtil.debug({
+        category: "contactLensConsumer.handler",
+        message: "Parsed kinesis payload",
+        context: kinesisPayload,
+      });
       if (kinesisPayload && kinesisPayload.EventType) {
         utils.logEventReceived(kinesisPayload.EventType);
 
@@ -18,7 +31,7 @@ exports.handler = async event => {
           kinesisPayload.EventType === "SEGMENTS" &&
           kinesisPayload.Segments
         ) {
-          kinesisPayload.Segments.forEach(segment => {
+          kinesisPayload.Segments.forEach((segment) => {
             if (segment.Utterance) {
               promises.push(
                 api.sendMessage(
@@ -35,9 +48,9 @@ exports.handler = async event => {
               segment.Categories
             ) {
               promises.push(
-                api.sendEvents(
+                api.sendRealtimeConversationEvents(
                   kinesisPayload.ContactId,
-                  utils.buildSendEventsPayload(segment.Categories)
+                  utils.buildSendRealtimeConversationEventsPayload(segment.Categories)
                 )
               );
             }

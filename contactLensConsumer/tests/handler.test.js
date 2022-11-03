@@ -1,6 +1,5 @@
 handler = require('../handler');
 
-jest.mock('../utils');
 const utils = require('../utils.js');
 
 jest.mock('../telephonyIntegrationApi');
@@ -62,7 +61,7 @@ describe('Lambda handler', () => {
     const expectedResponse = { result: 'Success' };
     mockVoiceIntelligencePilotEnabledValueGetter.mockReturnValue(true);
 
-    api.sendEvents.mockImplementationOnce(() => Promise.resolve(expectedResponse));
+    api.sendRealtimeConversationEvents.mockImplementationOnce(() => Promise.resolve(expectedResponse));
 
     await expect(await handler.handler(event)).toMatchObject([expectedResponse]);
   });

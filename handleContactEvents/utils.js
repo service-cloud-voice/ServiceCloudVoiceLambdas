@@ -15,5 +15,5 @@ function isDisconnectedEventForAbandonedCall(event) {
 }
 
 module.exports = {
-  isDisconnectedEventForAbandonedCall
+  isDisconnectedEventForAbandonedCall,
 };

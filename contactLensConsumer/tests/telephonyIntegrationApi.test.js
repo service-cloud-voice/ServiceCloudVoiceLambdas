@@ -28,8 +28,8 @@ describe('SendMessage API', () => {
   });
 })
 
-describe('SendEvents API', () => {
-  it('successfully sends events', async () => {
+describe('SendRealtimeConversationEvents API', () => {
+  it('successfully sent realtime conversation events', async () => {
     const expectedResponse = { result: 'Success' };
     utils.generateJWT.mockImplementationOnce(() => Promise.resolve('jwt'));
     axiosWrapper.scrtEndpoint.post.mockImplementationOnce(() => Promise.resolve({ data: expectedResponse }));
@@ -37,7 +37,7 @@ describe('SendEvents API', () => {
     await expect(await api.sendMessage('contactId', {})).toEqual(expectedResponse);
   });
 
-  it('handles error when sending events', async () => {
+  it('handles error when sending realtime conversation events', async () => {
     const expectedResponse = { result: 'Error' };
     utils.generateJWT.mockImplementationOnce(() => Promise.resolve('jwt'));
     axiosWrapper.scrtEndpoint.post.mockImplementationOnce(() => Promise.reject(expectedResponse));

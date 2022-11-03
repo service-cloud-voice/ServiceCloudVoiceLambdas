@@ -7,7 +7,7 @@ const generateJWTParams = {
   privateKeyParamName: config.privateKeyParamName,
   orgId: config.orgId,
   callCenterApiName: config.callCenterApiName,
-  expiresIn: config.tokenValidFor
+  expiresIn: config.tokenValidFor,
 };
 const vendorFQN = "amazon-connect";
 
@@ -34,23 +34,23 @@ async function sendMessage(contactId, payload) {
       headers: {
         Authorization: `Bearer ${jwt}`,
         "Content-Type": "application/json",
-        "Telephony-Provider-Name": vendorFQN
-      }
+        "Telephony-Provider-Name": vendorFQN,
+      },
     })
-    .then(response => {
-      SCVLoggingUtil.info(
-        "contactLensConsumer.sendMessage",
-        SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
-        "Successfully sent transcript",
-        { messageId: payload.messageId }
-      );
+    .then((response) => {
+      SCVLoggingUtil.info({
+        category: "contactLensConsumer.sendMessage",
+        eventType: "TRANSCRIPTION",
+        message: "Successfully sent transcript",
+        context: { messageId: payload.messageId },
+      });
       return response;
     })
-    .catch(error => {
+    .catch((error) => {
       handleError(
         error,
         "contactLensConsumer.sendMessage",
-        SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
+        "TRANSCRIPTION",
         "Error sending transcript"
       );
       // Do not throw error; failing lambda execution will keep Kinesis records in stream
@@ -60,31 +60,31 @@ async function sendMessage(contactId, payload) {
   return responseVal.data;
 }
 
-async function sendEvents(contactId, payload) {
+async function sendRealtimeConversationEvents(contactId, payload) {
   const jwt = await utils.generateJWT(generateJWTParams);
 
   const responseVal = await axiosWrapper.scrtEndpoint
-    .post(`/voiceCalls/${contactId}/events`, payload, {
+    .post(`/voiceCalls/${contactId}/realtimeConversationEvents`, payload, {
       headers: {
         Authorization: `Bearer ${jwt}`,
-        "Content-Type": "application/json"
-      }
+        "Content-Type": "application/json",
+      },
     })
-    .then(response => {
-      SCVLoggingUtil.info(
-        "contactLensConsumer.sendEvents",
-        SCVLoggingUtil.EVENT_TYPE.INTELLIGENCESIGNALS,
-        "Successfully sent events",
-        { totalEvents: payload.events.length }
-      );
+    .then((response) => {
+      SCVLoggingUtil.info({
+        category: "contactLensConsumer.sendRealtimeConversationEvents",
+        eventType: "INTELLIGENCESIGNALS",
+        message: "Successfully sent realtime conversation events",
+        context: { totalEvents: payload.events.length },
+      });
       return response;
     })
-    .catch(error => {
+    .catch((error) => {
       handleError(
         error,
-        "contactLensConsumer.sendEvents",
+        "contactLensConsumer.sendRealtimeConversationEvents",
         SCVLoggingUtil.EVENT_TYPE.INTELLIGENCESIGNALS,
-        "Error sending events"
+        "Error sending realtime conversationevents"
       );
       // Do not throw error; failing lambda execution will keep Kinesis records in stream
       return { data: { result: "Error" } };
@@ -95,5 +95,5 @@ async function sendEvents(contactId, payload) {
 
 module.exports = {
   sendMessage,
-  sendEvents
+  sendRealtimeConversationEvents,
 };

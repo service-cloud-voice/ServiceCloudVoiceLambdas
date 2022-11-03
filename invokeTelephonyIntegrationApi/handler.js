@@ -3,11 +3,16 @@ const api = require("./telephonyIntegrationApi");
 const config = require("./config");
 const utils = require("./utils");
 
-exports.handler = async event => {
+exports.handler = async (event) => {
+  SCVLoggingUtil.debug({
+    category: "invokeTelephonyIntegrationApi.handler.handler",
+    message: "Received event",
+    context: event,
+  });
   if (event["detail-type"] === "Scheduled Event") {
     return {
       statusCode: 200,
-      message: "Keep Lambda Warm"
+      message: "Keep Lambda Warm",
     };
   }
 
@@ -30,15 +35,30 @@ exports.handler = async event => {
         participants: [
           {
             participantKey: event.Details.ContactData.CustomerEndpoint.Address,
-            type: "END_USER"
-          }
-        ]
+            type: "END_USER",
+          },
+        ],
       };
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Invoke Create VoiceCall request with ${event.Details.ContactData.ContactId}`,
+        context: voiceCallFieldValues,
+      });
       result = await api.createVoiceCall(voiceCallFieldValues);
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Response received from Create VoiceCall with ${event.Details.ContactData.ContactId}`,
+        context: result,
+      });
       break;
     case "updateVoiceCall":
       fieldValues.callCenterApiName = config.callCenterApiName;
       result = await api.updateVoiceCall(contactId, fieldValues);
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Response received from update voiceCall with ${event.Details.ContactData.ContactId}`,
+        context: result,
+      });
       break;
     case "createTransferVC":
       voiceCallFieldValues = {
@@ -52,14 +72,27 @@ exports.handler = async event => {
         participants: [
           {
             participantKey: event.Details.ContactData.CustomerEndpoint.Address,
-            type: "END_USER"
-          }
-        ]
+            type: "END_USER",
+          },
+        ],
       };
+      if (event.Details.ContactData.Queue) {
+        voiceCallFieldValues.queue = event.Details.ContactData.Queue.ARN;
+      }
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Invoke Create TransferVC request with ${event.Details.ContactData.ContactId}`,
+        context: voiceCallFieldValues,
+      });
       result = await api.createVoiceCall(voiceCallFieldValues);
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Response received from Create TransferVC with ${event.Details.ContactData.ContactId}`,
+        context: result,
+      });
       break;
     case "executeOmniFlow": {
-      let dialedNumberParam;
+      let dialedNumberParam = fieldValues && fieldValues.dialedNumber;
       if (
         event.Details.ContactData &&
         event.Details.ContactData.SystemEndpoint
@@ -72,26 +105,59 @@ exports.handler = async event => {
         dialedNumber: dialedNumberParam,
         flowInputParameters: utils.constructFlowInputParams(
           event.Details.Parameters
-        )
+        ),
       };
-      result = await api.executeOmniFlow(
-        event.Details.ContactData.ContactId,
-        payload
-      );
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Invoke execute Omni Flow request with ${event.Details.ContactData.ContactId}`,
+        context: payload,
+      });
+      const contactIdParam =
+        contactId === null ? event.Details.ContactData.ContactId : contactId;
+      result = await api.executeOmniFlow(contactIdParam, payload);
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Response received from execute Omni Flow with ${event.Details.ContactData.ContactId}`,
+        context: result,
+      });
       break;
     }
     case "cancelOmniFlowExecution":
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Invoke cancel Omni Flow request with ${event.Details.ContactData.ContactId}`,
+        context: event.Details.Parameters.ContactId,
+      });
       result = await api.cancelOmniFlowExecution(
         event.Details.Parameters.ContactId
       );
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Response received from cancel Omni Flow with ${event.Details.ContactData.ContactId}`,
+        context: result,
+      });
+      break;
+    case "sendMessage":
+      fieldValues.callCenterApiName = config.callCenterApiName;
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Invoke sendMessage with ${contactId}`,
+        context: fieldValues,
+      });
+      result = await api.sendMessage(contactId, fieldValues);
+      SCVLoggingUtil.debug({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        message: `Response received for sendMessage with ${event.Details.ContactData.ContactId}`,
+        context: result,
+      });
       break;
     default:
-      SCVLoggingUtil.warn(
-        "invokeTelephonyIntegrationApi.handler.handler",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "Unsupported method",
-        {}
-      );
+      SCVLoggingUtil.warn({
+        category: "invokeTelephonyIntegrationApi.handler.handler",
+        eventType: "VOICECALL",
+        message: `Unsupported method ${methodName}`,
+        context: {},
+      });
       throw new Error(`Unsupported method: ${methodName}`);
   }
 

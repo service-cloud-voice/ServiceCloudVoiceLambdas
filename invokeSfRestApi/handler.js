@@ -20,16 +20,16 @@ async function dispatchSearch(sosl) {
 }
 
 // --------------- Main handler -----------------------
-exports.handler = async event => {
+exports.handler = async (event) => {
   let result = {};
-  const {
-    methodName,
-    objectApiName,
-    recordId,
-    soql,
-    sosl
-  } = event.Details.Parameters;
+  const { methodName, objectApiName, recordId, soql, sosl } =
+    event.Details.Parameters;
 
+  SCVLoggingUtil.debug({
+    category: "invokeSfRestApi.handler.handler",
+    message: "Received event",
+    context: event,
+  });
   switch (methodName) {
     case "createRecord":
       result = await api.createRecord(
@@ -70,12 +70,12 @@ exports.handler = async event => {
       break;
     }
     default: {
-      SCVLoggingUtil.warn(
-        "invokeSfRestApi.handler.handler",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "Unsupported method",
-        {}
-      );
+      SCVLoggingUtil.warn({
+        category: "invokeSfRestApi.handler.handler",
+        eventType: "VOICECALL",
+        message: "Unsupported method",
+        context: {},
+      });
       throw new Error(`Unsupported method: ${methodName}`);
     }
   }

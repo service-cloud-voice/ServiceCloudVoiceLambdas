@@ -12,7 +12,7 @@ function getCallAttributes(rawCallAttributes) {
   const prefixLen = prefix.length;
   const callAttributes = {};
 
-  Object.keys(rawCallAttributes).forEach(key => {
+  Object.keys(rawCallAttributes).forEach((key) => {
     if (key.startsWith(prefix)) {
       callAttributes[key.substring(prefixLen)] = rawCallAttributes[key];
     }
@@ -81,18 +81,18 @@ function transformCTR(ctr) {
     voiceCall.callAttributes = JSON.stringify(callAttributes);
   }
 
-  Object.keys(voiceCall).forEach(key => {
+  Object.keys(voiceCall).forEach((key) => {
     if (voiceCall[key] === null || voiceCall[key] === undefined) {
       delete voiceCall[key];
     }
   });
 
-  SCVLoggingUtil.info(
-    "ctrDataSync.handler.transformCTR",
-    SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-    "transform CTR data",
-    { CONTACT_ID: ctr.ContactId }
-  );
+  SCVLoggingUtil.info({
+    category: "ctrDataSync.handler.transformCTR",
+    eventType: "VOICECALL",
+    message: "transform CTR data",
+    context: { CONTACT_ID: ctr.ContactId },
+  });
   return { contactId: ctr.ContactId, fields: voiceCall };
 }
 
@@ -103,5 +103,5 @@ function parseData(data) {
 module.exports = {
   transformCTR,
   getCallAttributes,
-  parseData
+  parseData,
 };

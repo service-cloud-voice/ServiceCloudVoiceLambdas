@@ -1,5 +1,6 @@
 const utils = require("./utils");
 const axiosWrapper = require("./axiosWrapper");
+const SCVLoggingUtil = require("./SCVLoggingUtil");
 
 function buildError(e) {
   const status = e.response ? e.response.status : 500;
@@ -24,7 +25,7 @@ function buildError(e) {
     status,
     statusText,
     errorCode,
-    errorMessage
+    errorMessage,
   };
 }
 
@@ -58,10 +59,14 @@ async function createRecord(objectApiName, fieldValues) {
       fieldValues,
       { "Content-Type": "application/json" }
     );
-
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.createRecord",
+      message: "create Record response",
+      context: response,
+    });
     return {
       success: response.data.success,
-      recordId: response.data.id
+      recordId: response.data.id,
     };
   } catch (e) {
     return buildError(e);
@@ -76,14 +81,18 @@ async function updateRecord(objectApiName, recordId, fieldValues) {
       fieldValues,
       { "Content-Type": "application/json" }
     );
-
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.updateRecord",
+      message: "update Record response",
+      context: response,
+    });
     if (response.data === "") {
       return {
-        success: true
+        success: true,
       };
     }
     return {
-      success: false
+      success: false,
     };
   } catch (e) {
     return buildError(e);
@@ -104,7 +113,7 @@ async function sendRealtimeAlertEvent(fieldValues) {
       id: response.data.id,
       // successful response will also have error object with  "statusCode" : "OPERATION_ENQUEUED" and message with GUID
       // https://developer.salesforce.com/docs/atlas.en-us.platform_events.meta/platform_events/platform_events_publish_api.htm
-      errors: response.data.errors
+      errors: response.data.errors,
     };
   } catch (e) {
     return buildError(e);
@@ -117,7 +126,11 @@ async function queryRecord(soql) {
       "get",
       `/query/?q=${encodeURIComponent(soql)}`
     );
-
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.queryRecord",
+      message: "query Record response",
+      context: response,
+    });
     if (response.data.totalSize === 0) {
       return {};
     }
@@ -135,7 +148,11 @@ async function searchRecord(sosl) {
       "get",
       `/search/?q=${encodeURIComponent(sosl)}`
     );
-
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.searchRecord",
+      message: "search Record response",
+      context: response,
+    });
     if (response.data.searchRecords.length === 0) {
       return {};
     }
@@ -150,5 +167,5 @@ module.exports = {
   updateRecord,
   queryRecord,
   searchRecord,
-  sendRealtimeAlertEvent
+  sendRealtimeAlertEvent,
 };

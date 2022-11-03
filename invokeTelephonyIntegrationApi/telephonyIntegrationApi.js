@@ -7,7 +7,7 @@ const generateJWTParams = {
   privateKeyParamName: config.privateKeyParamName,
   orgId: config.orgId,
   callCenterApiName: config.callCenterApiName,
-  expiresIn: config.tokenValidFor
+  expiresIn: config.tokenValidFor,
 };
 const vendorFQN = "amazon-connect";
 
@@ -40,11 +40,11 @@ async function createVoiceCall(fieldVals) {
       headers: {
         Authorization: `Bearer ${jwt}`,
         "Content-Type": "application/json",
-        "Telephony-Provider-Name": vendorFQN
-      }
+        "Telephony-Provider-Name": vendorFQN,
+      },
     })
-    .then(response => response)
-    .catch(error => {
+    .then((response) => response)
+    .catch((error) => {
       let context = {};
       if (error.response) {
         // The request was made and the server responded with a status code that falls out of the range of 2xx
@@ -56,12 +56,13 @@ async function createVoiceCall(fieldVals) {
         // Something happened in setting up the request that triggered an error
         context = error.message;
       }
-      SCVLoggingUtil.error(
-        "invokeTelephonyIntegrationApi.telephonyIntegrationApi.createVoiceCall",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "Error creating VoiceCall record",
-        context
-      );
+      SCVLoggingUtil.error({
+        category:
+          "invokeTelephonyIntegrationApi.telephonyIntegrationApi.createVoiceCall",
+        eventType: "VOICECALL",
+        message: "Error creating VoiceCall record",
+        context,
+      });
       throw new Error("Error creating VoiceCall record");
     });
 
@@ -84,11 +85,11 @@ async function updateVoiceCall(contactId, fieldValues) {
       headers: {
         Authorization: `Bearer ${jwt}`,
         "Content-Type": "application/json",
-        "Telephony-Provider-Name": vendorFQN
-      }
+        "Telephony-Provider-Name": vendorFQN,
+      },
     })
-    .then(response => response)
-    .catch(error => {
+    .then((response) => response)
+    .catch((error) => {
       let context = {};
       if (error.response) {
         // The request was made and the server responded with a status code that falls out of the range of 2xx
@@ -100,12 +101,13 @@ async function updateVoiceCall(contactId, fieldValues) {
         // Something happened in setting up the request that triggered an error
         context = error.message;
       }
-      SCVLoggingUtil.error(
-        "invokeTelephonyIntegrationApi.telephonyIntegrationApi.updateVoiceCall",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "Error updating VoiceCall record",
-        context
-      );
+      SCVLoggingUtil.error({
+        category:
+          "invokeTelephonyIntegrationApi.telephonyIntegrationApi.updateVoiceCall",
+        eventType: "VOICECALL",
+        message: "Error updating VoiceCall record",
+        context,
+      });
       throw new Error(`Error updating VoiceCall record.${context}`);
     });
 
@@ -127,11 +129,11 @@ async function executeOmniFlow(contactId, payload) {
       headers: {
         Authorization: `Bearer ${jwt}`,
         "Content-Type": "application/json",
-        "Telephony-Provider-Name": vendorFQN
-      }
+        "Telephony-Provider-Name": vendorFQN,
+      },
     })
-    .then(response => response)
-    .catch(error => {
+    .then((response) => response)
+    .catch((error) => {
       let context = {};
       if (error.response) {
         // The request was made and the server responded with a status code that falls out of the range of 2xx
@@ -143,13 +145,68 @@ async function executeOmniFlow(contactId, payload) {
         // Something happened in setting up the request that triggered an error
         context = error.message;
       }
-      SCVLoggingUtil.error(
-        "invokeTelephonyIntegrationApi.telephonyIntegrationApi.executeOmniFlow",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "Error executing Omni Flow",
-        context
-      );
+      SCVLoggingUtil.error({
+        category:
+          "invokeTelephonyIntegrationApi.telephonyIntegrationApi.executeOmniFlow",
+        logType: "VOICECALL",
+        message: `Error executing Omni Flow with ${contactId}`,
+        context,
+      });
       throw new Error("Error executing Omni Flow");
+    });
+
+  return responseVal.data;
+}
+
+/**
+ * Send a messgage to Telephony Integration API.
+ *
+ * @param {string} contactId - The vendor-specific ID or the SObject ID of the VoiceCall record for which messages need to be sent.
+ * @param {object} payload - Contains message.
+ *
+ * @return {object}
+ */
+async function sendMessage(contactId, payload) {
+  const jwt = await utils.generateJWT(generateJWTParams);
+  const responseVal = await axiosWrapper.scrtEndpoint
+    .post(`/voiceCalls/${contactId}/messages`, payload, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN,
+      },
+    })
+    .then((response) => {
+      SCVLoggingUtil.info({
+        category:
+          "invokeTelephonyIntegrationApi.telephonyIntegrationApi.sendMessage",
+        eventType: "TRANSCRIPTION",
+        message: `Successfully sent transcript with ${contactId}`,
+        context: { messageId: payload.messageId },
+      });
+      return response;
+    })
+    .catch((error) => {
+      let context = {};
+      if (error.response) {
+        // The request was made and the server responded with a status code that falls out of the range of 2xx
+        context = error.response.data;
+      } else if (error.request) {
+        // The request was made but no response was received
+        context = error.request;
+      } else {
+        // Something happened in setting up the request that triggered an error
+        context = error.message;
+      }
+      SCVLoggingUtil.error({
+        category:
+          "invokeTelephonyIntegrationApi.telephonyIntegrationApi.sendMessage",
+        eventType: "TRANSCRIPTION",
+        message: `Error sending transcript with ${contactId}`,
+        context,
+      });
+      // Do not throw error; failing lambda execution will keep Kinesis records in stream
+      return { data: { result: "Error" } };
     });
 
   return responseVal.data;
@@ -169,11 +226,11 @@ async function cancelOmniFlowExecution(contactId) {
     .patch(`/voiceCalls/${contactId}/clearRouting`, null, {
       headers: {
         Authorization: `Bearer ${jwt}`,
-        "Content-Type": "application/json"
-      }
+        "Content-Type": "application/json",
+      },
     })
-    .then(response => response)
-    .catch(error => {
+    .then((response) => response)
+    .catch((error) => {
       let context = {};
       if (error.response) {
         // The request was made and the server responded with a status code that falls out of the range of 2xx
@@ -185,12 +242,13 @@ async function cancelOmniFlowExecution(contactId) {
         // Something happened in setting up the request that triggered an error
         context = error.message;
       }
-      SCVLoggingUtil.error(
-        "invokeTelephonyIntegrationApi.telephonyIntegrationApi.cancelOmniFlowExecution",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        "Error cancelling OmniFlowExecution",
-        context
-      );
+      SCVLoggingUtil.error({
+        category:
+          "invokeTelephonyIntegrationApi.telephonyIntegrationApi.cancelOmniFlowExecution",
+        eventType: "VOICECALL",
+        message: `Error cancelling OmniFlowExecution with ${contactId}`,
+        context,
+      });
       throw new Error("Error cancelling OmniFlowExecution");
     });
 
@@ -201,5 +259,6 @@ module.exports = {
   createVoiceCall,
   updateVoiceCall,
   executeOmniFlow,
-  cancelOmniFlowExecution
+  sendMessage,
+  cancelOmniFlowExecution,
 };

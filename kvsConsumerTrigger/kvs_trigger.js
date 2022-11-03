@@ -11,12 +11,16 @@ const lambda = new AWS.Lambda();
 function buildResponse() {
   return {
     // Async Java lambda is trigger, return "Success" for now
-    lambdaResult: "Success"
+    lambdaResult: "Success",
   };
 }
 
 exports.handler = (event, context, callback) => {
-  console.log("SCV - kvs_trigger.handler: function invoked");
+  SCVLoggingUtil.debug({
+    category: "kvs_trigger.handler",
+    message: "Received event",
+    context: event,
+  });
 
   let payload = {};
   let languageCodeSelected = "en-US";
@@ -43,7 +47,7 @@ exports.handler = (event, context, callback) => {
     streamAudioToCustomer:
       event.Details.ContactData.Attributes.streamAudioToCustomer !== "false",
     instanceARN: event.Details.ContactData.InstanceARN,
-    engine: event.Details.Parameters.engine || "standard" // valid inputs are "standard" (default) and "medical"
+    engine: event.Details.Parameters.engine || "standard", // valid inputs are "standard" (default) and "medical"
   };
 
   const vocabularyName = event.Details.Parameters.vocabularyName || null;
@@ -53,19 +57,19 @@ exports.handler = (event, context, callback) => {
     event.Details.Parameters.vocabularyFilterMethod || null;
   const specialty = event.Details.Parameters.specialty || null;
 
-  if (vocabularyName != null) {
+  if (vocabularyName !== null) {
     payload.vocabularyName = vocabularyName;
   }
 
-  if (vocabularyFilterName != null) {
+  if (vocabularyFilterName !== null) {
     payload.vocabularyFilterName = vocabularyFilterName;
   }
 
-  if (vocabularyFilterMethod != null) {
+  if (vocabularyFilterMethod !== null) {
     payload.vocabularyFilterMethod = vocabularyFilterMethod;
   }
 
-  if (specialty != null) {
+  if (specialty !== null) {
     payload.specialty = specialty; // for use with medical transcription
   }
 
@@ -75,19 +79,23 @@ exports.handler = (event, context, callback) => {
     // InvocationType is RequestResponse by default
     // LogType is not set so we won't get the last 4K of logs from the invoked function
     // Qualifier is not set so we use $LATEST
-    InvokeArgs: JSON.stringify(payload)
+    InvokeArgs: JSON.stringify(payload),
   };
-
-  lambda.invokeAsync(params, err => {
+  SCVLoggingUtil.debug({
+    category: "kvs_trigger.handler",
+    message: "Invoke lambda with params",
+    context: params,
+  });
+  lambda.invokeAsync(params, (err) => {
     if (err) {
       throw err;
     } else if (callback) callback(null, buildResponse());
     else
-      SCVLoggingUtil.info(
-        "kvs_trigger.handler.handler",
-        SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
-        "nothing to callback so letting it go"
-      );
+      SCVLoggingUtil.info({
+        category: "kvs_trigger.handler",
+        eventType: "TRANSCRIPTION",
+        message: "nothing to callback so letting it go",
+      });
   });
 
   callback(null, buildResponse());

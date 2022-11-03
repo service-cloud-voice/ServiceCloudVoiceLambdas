@@ -1,8 +1,9 @@
 const api = require("./sfRestApi");
+const SCVLoggingUtil = require("./SCVLoggingUtil");
 
 function formatQuery(args, queryStr) {
   let query;
-  Object.keys(args).forEach(key => {
+  Object.keys(args).forEach((key) => {
     const replacement = `{${key}}`;
     query = queryStr.replace(replacement, args[key]);
   });
@@ -14,10 +15,15 @@ function formatQuery(args, queryStr) {
 // replacing {key} with its value in the js object
 async function invokeQuery(query, args) {
   const formattedQuery = formatQuery(args, query);
+  SCVLoggingUtil.debug({
+    category: "queryEngine.invokeQuery",
+    message: "invoke query from sf rest api",
+    context: formattedQuery,
+  });
   return api.queryRecord(formattedQuery);
 }
 
 module.exports = {
   invokeQuery,
-  formatQuery
+  formatQuery,
 };
