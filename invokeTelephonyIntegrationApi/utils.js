@@ -3,11 +3,11 @@ const SSM = require("aws-sdk/clients/ssm");
 const uuid = require("uuid/v1");
 
 async function getSSMParameterValue(paramName, withDecryption) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const ssm = new SSM();
     const query = {
       Names: [paramName],
-      WithDecryption: withDecryption
+      WithDecryption: withDecryption,
     };
 
     ssm.getParameters(query, (err, data) => {
@@ -41,7 +41,7 @@ async function generateJWT(params) {
     subject: callCenterApiName,
     expiresIn,
     algorithm: "RS256",
-    jwtid: uuid()
+    jwtid: uuid(),
   };
 
   return jwt.sign({}, privateKey, signOptions);
@@ -59,7 +59,7 @@ function getCallAttributes(rawCallAttributes) {
   const prefixLen = prefix.length;
   const callAttributes = {};
 
-  Object.keys(rawCallAttributes).forEach(key => {
+  Object.keys(rawCallAttributes).forEach((key) => {
     if (key.startsWith(prefix)) {
       callAttributes[key.substring(prefixLen)] = rawCallAttributes[key];
     }
@@ -80,7 +80,7 @@ function constructFlowInputParams(rawFlowInputParams) {
   const prefixLen = prefix.length;
   const flowInputParams = {};
 
-  Object.keys(rawFlowInputParams).forEach(key => {
+  Object.keys(rawFlowInputParams).forEach((key) => {
     if (key.startsWith(prefix)) {
       flowInputParams[key.substring(prefixLen)] = rawFlowInputParams[key];
     }
@@ -93,5 +93,5 @@ module.exports = {
   getSSMParameterValue,
   generateJWT,
   getCallAttributes,
-  constructFlowInputParams
+  constructFlowInputParams,
 };

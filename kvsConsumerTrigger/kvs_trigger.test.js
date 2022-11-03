@@ -21,37 +21,37 @@ describe("Unit tests for kvs_trigger.js", () => {
             Audio: {
               StreamARN: "arn:aws:kinesis:*:111122223333:stream/my-stream",
               StartFragmentNumber: 1,
-              StartTimestamp: "2004-05-01 12:03:34"
-            }
-          }
+              StartTimestamp: "2004-05-01 12:03:34",
+            },
+          },
         },
         CustomerEndpoint: {
-          Address: "123-456-7890"
+          Address: "123-456-7890",
         },
         ContactId: "7bf73129-1428-4cd3-a780-95db273d1602",
         Attributes: {
           streamAudioFromCustomer: true,
           streamAudioToCustomer: true,
-          languageCode: "en-US"
+          languageCode: "en-US",
         },
         InstanceARN:
-          "arn:aws:connect:us-east-1:123456789012:instance/b6070940-51ab-4aa2-97df-6e6bf6950458"
+          "arn:aws:connect:us-east-1:123456789012:instance/b6070940-51ab-4aa2-97df-6e6bf6950458",
       },
-      Parameters: {}
-    }
+      Parameters: {},
+    },
   };
 
   const inputEventCustom = JSON.parse(JSON.stringify(inputEvent));
   inputEventCustom.Details.Parameters = {
     vocabularyName: "VocabName",
     vocabularyFilterName: "VocabFilterName",
-    vocabularyFilterMethod: "MASK"
+    vocabularyFilterMethod: "MASK",
   };
 
   const inputEventMedical = JSON.parse(JSON.stringify(inputEvent));
   inputEventMedical.Details.Parameters = {
     engine: "medical",
-    specialty: "ONCOLOGY"
+    specialty: "ONCOLOGY",
   };
 
   beforeEach(() => {

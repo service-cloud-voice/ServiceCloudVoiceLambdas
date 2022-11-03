@@ -22,16 +22,23 @@ function buildSendMessagePayload(transcript, approximateArrivalTimestamp) {
     payload.senderType = "END_USER";
   }
 
+  SCVLoggingUtil.debug({
+    message: "Send Message payload",
+    eventType: "TRANSCRIPTION",
+    context: payload,
+    category: "contactLensConsumer.utils.buildSendMessagePayload",
+  });
   return payload;
 }
 
-function buildSendEventsPayload(categories) {
+function buildSendRealtimeConversationEventsPayload(categories) {
   const matchedCategories = categories.MatchedCategories;
   const events = [];
   for (let i = 0; i < matchedCategories.length; i += 1) {
     const event = {};
     event.type = signalConfig.category;
     event.value = matchedCategories[i];
+    event.startTime = Date.now();
     const categoryDetails =
       categories.MatchedDetails[matchedCategories[i]].PointsOfInterest;
     if (categoryDetails && categoryDetails.length > 0) {
@@ -41,19 +48,25 @@ function buildSendEventsPayload(categories) {
   }
   const payload = {};
   payload.category = signalConfig.eventCategory;
-  payload.provider = signalConfig.provider;
   payload.service = signalConfig.service;
   payload.events = events;
+  payload.persist = false;
 
+  SCVLoggingUtil.debug({
+    message: "Send Realtime Conversation Events payload",
+    eventType: "INTELLIGENCESIGNALS",
+    context: payload,
+    category: "contactLensConsumer.utils.buildSendRealtimeConversationEventsPayload",
+  });
   return payload;
 }
 
 async function getSSMParameterValue(paramName, withDecryption) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const ssm = new SSM();
     const query = {
       Names: [paramName],
-      WithDecryption: withDecryption
+      WithDecryption: withDecryption,
     };
 
     ssm.getParameters(query, (err, data) => {
@@ -76,9 +89,14 @@ async function generateJWT(params) {
     subject: callCenterApiName,
     expiresIn,
     algorithm: "RS256",
-    jwtid: uuid()
+    jwtid: uuid(),
   };
 
+  SCVLoggingUtil.debug({
+    message: `JWT SignOptions ${signOptions}`,
+    context: {},
+    category: "contactLensConsumer.utils.generateJWT",
+  });
   return jwt.sign({}, privateKey, signOptions);
 }
 
@@ -88,33 +106,39 @@ function logEventReceived(eventType) {
     eventType === "SEGMENTS" ||
     eventType === "COMPLETED"
   ) {
-    SCVLoggingUtil.info(
-      "contactLensConsumer.handler",
-      SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
-      `ContactLensConsumer received ${eventType} event`,
-      {}
-    );
+    SCVLoggingUtil.info({
+      message: `ContactLensConsumer received ${eventType} event`,
+      eventType: "TRANSCRIPTION",
+      context: {},
+      category: "contactLensConsumer.utils.logEventReceived",
+    });
   } else if (eventType === "FAILED") {
-    SCVLoggingUtil.error(
-      "contactLensConsumer.handler",
-      SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
-      `ContactLensConsumer received ${eventType} event`,
-      {}
-    );
+    SCVLoggingUtil.error({
+      message: `ContactLensConsumer received ${eventType} event`,
+      eventType: "TRANSCRIPTION",
+      context: {},
+      category: "contactLensConsumer.utils.logEventReceived",
+    });
   } else {
-    SCVLoggingUtil.warn(
-      "contactLensConsumer.handler",
-      SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
-      "ContactLensConsumer received unknown event",
-      { eventType }
-    );
+    SCVLoggingUtil.warn({
+      message: `ContactLensConsumer received unknown event`,
+      eventType: "TRANSCRIPTION",
+      context: eventType,
+      category: "contactLensConsumer.utils.logEventReceived",
+    });
   }
+}
+
+function parseData(data) {
+  const payload = Buffer.from(data, "base64").toString("utf8");
+  return JSON.parse(payload);
 }
 
 module.exports = {
   buildSendMessagePayload,
-  buildSendEventsPayload,
+  buildSendRealtimeConversationEventsPayload,
   generateJWT,
   getSSMParameterValue,
-  logEventReceived
+  logEventReceived,
+  parseData,
 };

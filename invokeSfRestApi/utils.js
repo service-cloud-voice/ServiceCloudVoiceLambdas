@@ -5,11 +5,11 @@ const config = require("./config");
 const axiosWrapper = require("./axiosWrapper");
 
 async function getSSMParameters(paramNames, withDecryption) {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const ssm = new SSM();
     const query = {
       Names: paramNames,
-      WithDecryption: withDecryption
+      WithDecryption: withDecryption,
     };
 
     ssm.getParameters(query, (err, data) => {
@@ -30,7 +30,7 @@ function putSSMParameter(name, value) {
     Value: value,
     Tier: "Standard",
     Type: "SecureString",
-    Overwrite: true
+    Overwrite: true,
   };
 
   ssm.putParameter(param, () => {});
@@ -40,7 +40,7 @@ function generateJWT(payload, expiresIn, privateKey) {
   const options = {
     algorithm: "RS256",
     expiresIn,
-    jwtid: uuid()
+    jwtid: uuid(),
   };
 
   return jwt.sign(payload, privateKey, options);
@@ -53,22 +53,22 @@ async function getAccessToken(refresh) {
       config.privateKeyParamName,
       config.accessTokenParamName,
       config.audienceParamName,
-      config.subjectParamName
+      config.subjectParamName,
     ],
     true
   );
   const consumerKey = ssmParams.filter(
-    p => p.Name === config.consumerKeyParamName
+    (p) => p.Name === config.consumerKeyParamName
   )[0].Value;
   const privateKey = ssmParams.filter(
-    p => p.Name === config.privateKeyParamName
+    (p) => p.Name === config.privateKeyParamName
   )[0].Value;
   const accessTokenParam = ssmParams.filter(
-    p => p.Name === config.accessTokenParamName
+    (p) => p.Name === config.accessTokenParamName
   )[0];
-  const aud = ssmParams.filter(p => p.Name === config.audienceParamName)[0]
+  const aud = ssmParams.filter((p) => p.Name === config.audienceParamName)[0]
     .Value;
-  const sub = ssmParams.filter(p => p.Name === config.subjectParamName)[0]
+  const sub = ssmParams.filter((p) => p.Name === config.subjectParamName)[0]
     .Value;
 
   if (!accessTokenParam || refresh) {
@@ -77,29 +77,24 @@ async function getAccessToken(refresh) {
       {
         iss: consumerKey,
         sub,
-        aud
+        aud,
       },
       config.tokenValidFor,
       privateKey
     );
-    let response;
-    try {
-      response = await axiosWrapper.authEndpoint.post(
-        "",
-        `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${generatedJwt}`,
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          }
-        }
-      );
+    const response = await axiosWrapper.authEndpoint.post(
+      "",
+      `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${generatedJwt}`,
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
 
-      putSSMParameter(config.accessTokenParamName, response.data.access_token);
+    putSSMParameter(config.accessTokenParamName, response.data.access_token);
 
-      return response.data.access_token;
-    } catch (e) {
-      throw e;
-    }
+    return response.data.access_token;
   }
 
   return accessTokenParam.Value;
@@ -117,7 +112,7 @@ const NON_FIELD_NAMES = ["methodName", "objectApiName", "recordId"];
 function getSObjectFieldValuesFromConnectLambdaParams(params) {
   const fieldValues = {};
 
-  Object.entries(params).forEach(entry => {
+  Object.entries(params).forEach((entry) => {
     const key = entry[0];
 
     if (NON_FIELD_NAMES.includes(key)) {
@@ -132,7 +127,7 @@ function getSObjectFieldValuesFromConnectLambdaParams(params) {
 
 function getRealtimeAlertEventFieldValuesFromConnectLambdaParams(params) {
   const fieldValues = {};
-  Object.entries(params).forEach(entry => {
+  Object.entries(params).forEach((entry) => {
     const key = entry[0];
     if (key !== "methodName") {
       fieldValues[key] = entry[1];
@@ -146,5 +141,5 @@ module.exports = {
   getAccessToken,
   formatObjectApiName,
   getSObjectFieldValuesFromConnectLambdaParams,
-  getRealtimeAlertEventFieldValuesFromConnectLambdaParams
+  getRealtimeAlertEventFieldValuesFromConnectLambdaParams,
 };

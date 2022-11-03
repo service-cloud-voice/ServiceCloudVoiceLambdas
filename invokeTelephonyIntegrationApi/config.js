@@ -6,5 +6,5 @@ module.exports = {
   privateKeyParamName: process.env.PRIVATE_KEY_PARAM_NAME,
   callCenterApiName: process.env.CALL_CENTER_API_NAME,
   // JWT token valid duration.
-  tokenValidFor: "5m"
+  tokenValidFor: "5m",
 };

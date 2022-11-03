@@ -14,8 +14,8 @@ function generatePrivatePublicKeyPair(requestDetails) {
     { name: "commonName", value: "www.salesforce.com" },
     {
       name: "organizationalUnitName",
-      value: requestDetails.OrganizationalUnitName
-    }
+      value: requestDetails.OrganizationalUnitName,
+    },
   ];
   const expiresIn = requestDetails.ExpiresIn;
 
@@ -23,7 +23,7 @@ function generatePrivatePublicKeyPair(requestDetails) {
   return pems;
 }
 
-exports.handler = async event => {
+exports.handler = async (event) => {
   const parameters = event.ResourceProperties.Parameters;
 
   const requestType = parameters.RequestType;
@@ -38,7 +38,7 @@ exports.handler = async event => {
 
       ret = {
         Success: true,
-        Certificate: pems.cert
+        Certificate: pems.cert,
       };
       break;
     }
@@ -48,14 +48,14 @@ exports.handler = async event => {
 
       ret = {
         Success: true,
-        Message: `The SSM parameter ${ssmParamName} is put successfully.`
+        Message: `The SSM parameter ${ssmParamName} is put successfully.`,
       };
       break;
     }
     default: {
       ret = {
         Success: false,
-        Message: `Unsupported requestType along with parameter ${ssmParamName}`
+        Message: `Unsupported requestType along with parameter ${ssmParamName}`,
       };
 
       break;

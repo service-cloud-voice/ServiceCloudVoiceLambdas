@@ -8,12 +8,12 @@ class SFSPhoneCallFlow {
       if (typeof obj === "undefined" || obj === null) return true;
       return JSON.stringify(obj) === "{}";
     } catch (ex) {
-      SCVLoggingUtil.error(
-        "invokeSfRestApi.handler.handler",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        `isEmptyObject() exception: ${ex.message}`,
-        {}
-      );
+      SCVLoggingUtil.error({
+        category: "invokeSfRestApi.handler.handler",
+        eventType: "VOICECALL",
+        message: `isEmptyObject() exception: ${ex.message}`,
+        context: {},
+      });
       return true;
     }
   }
@@ -27,29 +27,64 @@ class SFSPhoneCallFlow {
     }
   }
 
+  static logx(msg) {
+    if (!msg) return;
+    SCVLoggingUtil.error({
+      category: "invokeSfRestApi.handler.handler",
+      eventType: "VOICECALL",
+      message: `\n--- ${msg}`,
+      context: {},
+    });
+  }
+
   static async getInfo(cusPhoneNumber = "") {
     try {
+      let qry;
+      let resx;
+
+      SFSPhoneCallFlow.logx("version: 1.0.1");
+
       if (!cusPhoneNumber || cusPhoneNumber === "anonymous") {
+        SFSPhoneCallFlow.logx("cusPhoneNumber===anonymous");
         return { success: true, statusCode: 200, status: "ANONYMOUS" };
       }
 
       if (!SFSPhoneCallFlow.isValidPhoneNumber(cusPhoneNumber)) {
-        SCVLoggingUtil.error(
-          "invokeSfRestApi.handler.handler",
-          SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-          `Security test failure: invalid phone number [${cusPhoneNumber}]`,
-          {}
+        SFSPhoneCallFlow.logx(
+          `Security test failure: invalid phone number [${cusPhoneNumber}]`
         );
         return { success: true, statusCode: 200, status: "ANONYMOUS" };
       }
 
-      const qry = `SELECT ServiceResource.RelatedRecord.Phone
-          FROM AssignedResource
-          WHERE LocationStatus='EnRoute' AND (ServiceAppointment.Status='En Route') AND (ServiceAppointment.Contact.Phone='${cusPhoneNumber}')`;
+      let ApptAssistantStatus = "";
+      qry = "SELECT ApptAssistantStatus FROM FieldServiceOrgSettings";
+      resx = await queryEngine.invokeQuery(qry, { methodName: "queryRecord" });
 
-      const resx = await queryEngine.invokeQuery(qry, {
-        methodName: "queryRecord"
-      });
+      if (!SFSPhoneCallFlow.isEmptyObject(resx)) {
+        ApptAssistantStatus = resx.ApptAssistantStatus;
+        SFSPhoneCallFlow.logx(
+          `ApptAssistantStatus fetched from DB as [${ApptAssistantStatus}]`
+        );
+      }
+
+      if (!ApptAssistantStatus) {
+        SFSPhoneCallFlow.logx(
+          "ApptAssistantStatus not found in DB, Assigned to [En Route]"
+        );
+        ApptAssistantStatus = "En Route";
+      }
+
+      qry = `SELECT ServiceResource.RelatedRecord.Phone
+              FROM AssignedResource
+              WHERE (LocationStatus in ('EnRoute', 'LastMile')) 
+                AND (ServiceAppointment.Status='${ApptAssistantStatus}') 
+                AND (ServiceAppointment.Contact.Phone='${cusPhoneNumber}')
+              ORDER BY AssignedResourceNumber DESC
+              LIMIT 1`;
+
+      SFSPhoneCallFlow.logx(qry);
+
+      resx = await queryEngine.invokeQuery(qry, { methodName: "queryRecord" });
 
       if (
         SFSPhoneCallFlow.isEmptyObject(resx) ||
@@ -57,32 +92,34 @@ class SFSPhoneCallFlow {
         SFSPhoneCallFlow.isEmptyObject(resx.ServiceResource.RelatedRecord) ||
         !resx.ServiceResource.RelatedRecord.Phone
       ) {
+        SFSPhoneCallFlow.logx(
+          "Assign resource not found or no phone in AssignedResource record"
+        );
         return {
           success: true,
           statusCode: 200,
-          msg:
-            "Assign resource not found or no phone in AssignedResource record",
-          status: "PHONE_NOT_FOUND"
+          msg: "Assign resource not found or no phone in AssignedResource record",
+          status: "PHONE_NOT_FOUND",
         };
       }
+
+      SFSPhoneCallFlow.logx(
+        `SUCCESS: engineer's phone number found: ${resx.ServiceResource.RelatedRecord.Phone}`
+      );
+
       return {
         success: true,
         status: "TRANSFER_CALL",
         statusCode: 200,
-        engPhone: resx.ServiceResource.RelatedRecord.Phone
+        engPhone: resx.ServiceResource.RelatedRecord.Phone,
       };
     } catch (ex) {
-      SCVLoggingUtil.error(
-        "invokeSfRestApi.handler.handler",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        `getInfo() exception: ${ex.msg}`,
-        {}
-      );
+      SFSPhoneCallFlow.logx(`getInfo() exception: ${ex.message}`);
       return {
         success: true,
         statusCode: 200,
         msg: "getInfo() exception",
-        status: "PHONE_NOT_FOUND"
+        status: "PHONE_NOT_FOUND",
       };
     }
   }
@@ -102,17 +139,12 @@ class SFSPhoneCallFlow {
       const res = await SFSPhoneCallFlow.getInfo(cusPhoneNumber);
       return res;
     } catch (ex) {
-      SCVLoggingUtil.error(
-        "invokeSfRestApi.handler.handler",
-        SCVLoggingUtil.EVENT_TYPE.VOICECALL,
-        `entryPoint() exception: ${ex.msg}`,
-        {}
-      );
+      SFSPhoneCallFlow.logx(`entryPoint() exception: ${ex.message}`);
       return {
         success: true,
         statusCode: 200,
         msg: "SFSPhoneCallFlow - Lambda event handler exception",
-        status: "PHONE_NOT_FOUND"
+        status: "PHONE_NOT_FOUND",
       };
     }
   }
@@ -124,5 +156,5 @@ async function entryPoint(event) {
 }
 
 module.exports = {
-  entryPoint
+  entryPoint,
 };
