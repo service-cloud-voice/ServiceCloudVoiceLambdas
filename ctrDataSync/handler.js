@@ -28,7 +28,8 @@ function shouldProcessCtr(ctrRecord) {
     ctrRecord.InitiationMethod === "INBOUND" ||
     ctrRecord.InitiationMethod === "OUTBOUND" ||
     ctrRecord.InitiationMethod === "TRANSFER" ||
-    ctrRecord.InitiationMethod === "CALLBACK"
+    ctrRecord.InitiationMethod === "CALLBACK" ||
+    ctrRecord.InitiationMethod === "API"
   );
 }
 

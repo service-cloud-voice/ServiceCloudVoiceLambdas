@@ -62,9 +62,24 @@ describe('transformCTR', () => {
         "fields":{
             "endTime":"2020-08-07T06:09:41Z"
         }
-    }
-   it('should remove key with undefined value', () => {
+    };
+    it('should remove key with undefined value', () => {
         expect(utils.transformCTR(input2)).toStrictEqual(expected2);
+    });
+
+    let input3 = {
+        "ContactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
+        "InitiationMethod":"API"
+    };
+    let expected3 = {
+        "contactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
+        "fields":{
+            "initiationMethod":"INBOUND"
+        }
+    };
+    let actual3 = utils.transformCTR(input3);
+    it('should transform raw CTR data with initiationMethod API to voicecall with initiationMethod INBOUND like JSON', () => {
+        expect(actual3).toStrictEqual(expected3);
     });
 });
 

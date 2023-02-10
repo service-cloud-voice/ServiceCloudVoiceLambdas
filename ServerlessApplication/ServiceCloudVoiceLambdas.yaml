@@ -46,6 +46,10 @@ Parameters:
     Type: String
     Default: salesforce-rest-api-subject
     Description: The name of the SSM parameter used to store the Salesforce REST API subject value.
+  SalesforceS3BucketForVoiceMail:
+    Default: testVoiceMailBucket
+    Type: String
+    Description: S3 Bucket to store voicemail recordings and transcription
   ConnectInstanceId:
     Type: String
     Default: service-cloud-voice-contact-center-id
@@ -54,6 +58,8 @@ Parameters:
     Default: ''
     Type: String
     Description: IAM Permission Boundary ARN as defined by the admin
+
+
 
 Conditions:
   CreatePermissionBoundary: 
@@ -138,6 +144,19 @@ Resources:
     Metadata:
         BuildMethod: nodejs14.x
 
+  PostCallAnalysisTriggerFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: postCallAnalysisTriggerFunctionLayer
+      Description: PostCallAnalysisTriggerFunction npm package
+      ContentUri: layers/postCallAnalysisTriggerFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+        BuildMethod: nodejs14.x
+
   InvokeTelephonyIntegrationApiFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
@@ -194,6 +213,116 @@ Resources:
       Layers:
         - Ref: invokeSalesforceRestApiFunctionLayer
 
+  KinesisStreamStorageAssociateFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [CreatePermissionBoundary, !Ref PermissionBoundaryARN, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      Policies:
+      - PolicyName: SCVCTRDataSyncFunctionRolePolicy
+        PolicyDocument:
+          Statement:
+          - Action:
+            - connect:ListInstanceStorageConfigs
+            - connect:AssociateInstanceStorageConfig
+            Resource:
+            - "*"
+            Effect: Allow
+      RoleName: "KinesisStreamStorageAssociateFunctionRole"
+      
+  ContactLensKinesisStreamAssociateFunction:
+    DependsOn: KinesisStreamStorageAssociateFunctionRoleResource
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      FunctionName: !Sub "${CallCenterApiName}-ContactLensKinesisStreamAssociateFunction"
+      Role:
+        Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/KinesisStreamStorageAssociateFunctionRole"
+      Code:
+        ZipFile:
+            !Sub |
+                import json
+                import boto3
+                import os
+                import cfnresponse
+                
+                def verifyRealtimeContactAnalysisSegmentsExist(client, connectInstanceId):
+                  try:
+                    response = client.list_instance_storage_configs(
+                        InstanceId=connectInstanceId,
+                        ResourceType='REAL_TIME_CONTACT_ANALYSIS_SEGMENTS'
+                    )
+                    if response and response['StorageConfigs'] and response['StorageConfigs'][0] is not None:
+                      return (True, response['StorageConfigs'][0]['AssociationId'])
+                  except Exception as e:
+                    return(False, "Cannot Find REAL_TIME_CONTACT_ANALYSIS_SEGMENTS association: " + str(e))
+              
+                def addRealtimeContactAnalysisSegments(client, connectInstanceId, streamArnVal):
+                  try:
+                    response = client.associate_instance_storage_config(
+                        InstanceId=connectInstanceId,
+                        ResourceType='REAL_TIME_CONTACT_ANALYSIS_SEGMENTS',
+                        StorageConfig={
+                            'StorageType': 'KINESIS_STREAM',
+                            'KinesisStreamConfig': {
+                                'StreamArn': streamArnVal
+                            }
+                        }
+                    )
+                    return(True, response['ResponseMetadata']['RequestId'])
+                  except Exception as e:
+                    return (False, "Cannot Associate REAL_TIME_CONTACT_ANALYSIS_SEGMENTS: " + str(e))
+              
+                def lambda_handler(event, context):
+                  client = boto3.client('connect')
+                  streamArnVal = event['ResourceProperties']['Create']['StreamArn']
+                  connectInstanceId = event['ResourceProperties']['Create']['ConnectInstanceId']
+                  if event['RequestType'] == 'Create':
+                    associationId = verifyRealtimeContactAnalysisSegmentsExist(client, connectInstanceId)
+                    if associationId and associationId[1] is not None:
+                      response = True
+                      reason = "Already associated"
+                    else:
+                      response,reason = addRealtimeContactAnalysisSegments(client, connectInstanceId, streamArnVal)
+                  elif event['RequestType'] == 'Update':
+                    response = True
+                    reason = "Nothing To Update"
+                  elif event['RequestType'] == 'Delete':
+                    response = True
+                    reason = "Nothing To Delete"
+                  else:
+                    response = False
+                    reason = "Unknown operation: " + event['RequestType']
+                  responseData = {}
+                  responseData['Reason'] = reason
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
+        
+  InvokeContactLensKinesisStreamAssociateFunction:
+    DependsOn: ContactLensKinesisStreamAssociateFunction
+    Type: Custom::InvokeContactLensKinesisStreamAssociateFunction
+    Properties:
+      Create:
+        StreamArn: !GetAtt ContactLensStream.Arn
+        ConnectInstanceId: !Ref ConnectInstanceId
+      ServiceToken:
+        Fn::GetAtt:
+        - ContactLensKinesisStreamAssociateFunction
+        - Arn
+      Description: Invoke ContactLensKinesisStreamAssociateFunction
+  
   CTRDataSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -299,6 +428,25 @@ Resources:
           LOG_LEVEL: "info"
       Layers:
         - Ref: kvsConsumerTriggerFunctionLayer
+
+  PostCallAnalysisTriggerFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: postCallAnalysisTrigger/
+      Handler: handler.handler
+      AutoPublishAlias: active
+      Role: !GetAtt PostCallAnalysisTriggerFunctionRole.Arn
+      Runtime: nodejs14.x
+      Timeout: 900
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${ScrtEndpointUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          LOG_LEVEL: "info"
+      Layers:
+        - Ref: PostCallAnalysisTriggerFunctionLayer
 
   AIPoweredSpeechAnalyticsKvsTranscribeRole:
     Type: "AWS::IAM::Role"
@@ -416,6 +564,41 @@ Resources:
                   - "lambda:InvokeAsync"
                 Resource:
                   - "*"
+
+  PostCallAnalysisTriggerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [CreatePermissionBoundary, !Ref PermissionBoundaryARN, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PostCallAnalysisTriggerFunctionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - "connect:DescribeContact"
+                  - "s3:GetObject"
+                  - "s3:GetBucketNotification"
+                  - "lambda:InvokeFunction"
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                  - "ssm:Describe*"
+                  - "ssm:Get*"
+                  - "ssm:List*"
+                Resource:
+                  - "*"
+                Effect: Allow
 
   ContactLensStream:
     Type: AWS::Kinesis::Stream
@@ -958,6 +1141,256 @@ Resources:
       DashboardBody: !Sub '{"widgets":[{"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ToInstancePacketLossRate","Participant","Agent","Type of Connection","WebRTC","Instance ID","${ConnectInstanceId}","Stream Type","Voice"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ToInstancePacketLossRate"}},{"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallsBreachingConcurrencyQuota","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallsBreachingConcurrencyQuota"}},{"type":"metric","x":0,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","MissedCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"MissedCalls"}},{"type":"metric","x":6,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","MisconfiguredPhoneNumbers","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"MisconfiguredPhoneNumbers"}},{"type":"metric","x":6,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ThrottledCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ThrottledCalls"}},{"type":"metric","x":0,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallRecordingUploadError","InstanceId","${ConnectInstanceId}","MetricGroup","CallRecordings"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallRecordingUploadError"}},{"type":"metric","x":12,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallsPerInterval","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallsPerInterval"}},{"type":"metric","x":12,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ConcurrentCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ConcurrentCalls"}},{"type":"metric","x":12,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ConcurrentCallsPercentage","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ConcurrentCallsPercentage"}}]}'
       DashboardName: !Sub '${CallCenterApiName}-ServiceCloudVoiceConnectDashboard'
 
+  VoiceMailAudioProcessingFuntionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+        - arn:aws:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess
+      Policies:
+        - PolicyName: VoiceMailAudioProcessingRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - kinesis:DescribeStream
+                  - kinesis:DescribeStreamSummary
+                  - kinesis:GetRecords
+                  - kinesis:GetShardIterator
+                  - kinesis:ListShards
+                  - kinesis:ListStreams
+                  - kinesis:SubscribeToShard
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - lambda:InvokeFunction
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource:
+                  - "*"
+                Effect: Allow
+
+  VoiceMailPackagingFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: VoiceMailPackagingRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - lambda:InvokeFunction
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - ssm:Describe*
+                  - ssm:Get*
+                  - ssm:List*
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - connect:UpdateContactAttributes
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectTagging
+                  - s3:PutObjectTagging
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:ListTranscriptionJobs
+                Resource:
+                  - "*"
+                Effect: Allow
+
+  VoiceMailTranscribeFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      Policies:
+        - PolicyName: VoiceMailTranscribeRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:DeleteMedicalTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:GetMedicalTranscriptionJob
+                  - transcribe:GetVocabulary
+                  - transcribe:GetMedicalVocabulary
+                  - transcribe:GetVocabularyFilter
+                  - transcribe:ListTranscriptionJobs
+                  - transcribe:ListMedicalTranscriptionJobs
+                  - transcribe:ListVocabularies
+                  - transcribe:ListMedicalVocabularies
+                  - transcribe:ListVocabularyFilters
+                  - transcribe:StartStreamTranscription
+                  - transcribe:StartMedicalStreamTranscription
+                  - transcribe:StartTranscriptionJob
+                  - transcribe:StartMedicalTranscriptionJob
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - ssm:Describe*
+                  - ssm:Get*
+                  - ssm:List*
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - connect:UpdateContactAttributes
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectTagging
+                  - s3:PutObjectTagging
+                Resource:
+                  - "*"
+                Effect: Allow
+
+  VoiceMailAudioProcessingFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: VoiceMailAudioProcessingFunctionLayer
+      Description: VoiceMailAudioProcessingFunctionLayer node modules
+      ContentUri: layers/voiceMailAudioProcessingFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: nodejs14.x
+
+  VoiceMailTranscribeFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: voiceMailTranscribeFunctionLayer
+      Description: voiceMailTranscribeFunctionLayer node modules
+      ContentUri: layers/voiceMailTranscribeFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: nodejs14.x
+
+  VoiceMailPackagingFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: voiceMailPackagingFunctionLayer
+      Description: voiceMailPackagingFunctionLayer node modules
+      ContentUri: layers/voiceMailPackagingFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: nodejs14.x
+
+  VoiceMailAudioProcessingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: voiceMailAudioProcessing/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          s3_recordings_bucket: !Sub ${SalesforceS3BucketForVoiceMail}
+          LOG_LEVEL: "info"
+      Role: !GetAtt VoiceMailAudioProcessingFuntionRole.Arn
+      Timeout: 30
+      Layers:
+        - Ref: VoiceMailAudioProcessingFunctionLayer
+
+  VoiceMailTranscribeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: voiceMailTranscribe/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          TRANSCRIBE_REGION: "us-west-2"
+          LOG_LEVEL: "info"
+      Role: !GetAtt VoiceMailTranscribeFunctionRole.Arn
+      Timeout: 5
+      Layers:
+        - Ref: VoiceMailTranscribeFunctionLayer
+
+  VoiceMailPackagingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: voiceMailPackaging/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          invoke_telephony_integration_api_arn: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+          LOG_LEVEL: "info"
+      Role: !GetAtt VoiceMailPackagingFunctionRole.Arn
+      Timeout: 60
+      Layers:
+        - Ref: VoiceMailPackagingFunctionLayer
+
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
   # Find out more about other implicit resources you can reference within SAM
@@ -1019,4 +1452,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 10.0.0
+    SemanticVersion: 11.0.0

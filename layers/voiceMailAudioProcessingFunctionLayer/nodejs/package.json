@@ -1,0 +1,11 @@
+{
+  "name": "voiceMailAudioProcessingFunctionLayer",
+  "version": "1.0.0",
+  "description": "The package dependencies required by the voiceMailAudioProcessingFunctionLayer Lambda function.",
+  "main": "",
+  "dependencies": {
+    "aws-sdk": "2.814.0",
+    "winston": "3.2.1",
+    "ebml": "3.0.0"
+  }
+}

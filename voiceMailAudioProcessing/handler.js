@@ -337,6 +337,7 @@ exports.handler = async (event) => {
     }
   }
 
+  // log the response for ALL records
   SCVLoggingUtil.info({
     message: "voiceMailAudioProcessing response",
     context: {

@@ -46,7 +46,8 @@ function transformCTR(ctr) {
   }
 
   if (ctr.InitiationMethod) {
-    voiceCall.initiationMethod = ctr.InitiationMethod;
+    // Convert API initiationMethod CTR to INBOUND
+    voiceCall.initiationMethod = (ctr.InitiationMethod === 'API' ? 'INBOUND' : ctr.InitiationMethod);
     if (
       ctr.InitiationMethod === "OUTBOUND" ||
       ctr.InitiationMethod === "CALLBACK"

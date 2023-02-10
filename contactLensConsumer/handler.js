@@ -26,7 +26,6 @@ exports.handler = async (event) => {
       });
       if (kinesisPayload && kinesisPayload.EventType) {
         utils.logEventReceived(kinesisPayload.EventType);
-
         if (
           kinesisPayload.EventType === "SEGMENTS" &&
           kinesisPayload.Segments
@@ -44,7 +43,7 @@ exports.handler = async (event) => {
               );
             }
             if (
-              signalConfig.voiceIntelligencePilotEnabled &&
+              signalConfig.voiceIntelligenceEnabled &&
               segment.Categories
             ) {
               promises.push(

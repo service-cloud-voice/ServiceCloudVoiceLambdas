@@ -39,6 +39,7 @@ function buildSendRealtimeConversationEventsPayload(categories) {
     event.type = signalConfig.category;
     event.value = matchedCategories[i];
     event.startTime = Date.now();
+  
     const categoryDetails =
       categories.MatchedDetails[matchedCategories[i]].PointsOfInterest;
     if (categoryDetails && categoryDetails.length > 0) {
@@ -47,7 +48,6 @@ function buildSendRealtimeConversationEventsPayload(categories) {
     events.push(event);
   }
   const payload = {};
-  payload.category = signalConfig.eventCategory;
   payload.service = signalConfig.service;
   payload.events = events;
   payload.persist = false;
