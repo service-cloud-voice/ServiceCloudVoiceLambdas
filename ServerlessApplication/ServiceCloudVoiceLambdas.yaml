@@ -295,7 +295,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          transcriptionFunction: !GetAtt kvsTranscriber.Arn
+          INVOKE_KVS_TRANSCRIBER_ARN: !GetAtt kvsTranscriber.Arn
           LOG_LEVEL: "info"
       Layers:
         - Ref: kvsConsumerTriggerFunctionLayer
