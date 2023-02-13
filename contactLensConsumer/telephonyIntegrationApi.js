@@ -83,8 +83,8 @@ async function sendRealtimeConversationEvents(contactId, payload) {
       handleError(
         error,
         "contactLensConsumer.sendRealtimeConversationEvents",
-        SCVLoggingUtil.EVENT_TYPE.INTELLIGENCESIGNALS,
-        "Error sending realtime conversationevents"
+        "INTELLIGENCESIGNALS",
+        "Error sending realtime conversation events"
       );
       // Do not throw error; failing lambda execution will keep Kinesis records in stream
       return { data: { result: "Error" } };

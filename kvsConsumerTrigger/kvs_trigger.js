@@ -79,14 +79,15 @@ exports.handler = (event, context, callback) => {
     // InvocationType is RequestResponse by default
     // LogType is not set so we won't get the last 4K of logs from the invoked function
     // Qualifier is not set so we use $LATEST
-    InvokeArgs: JSON.stringify(payload),
+    InvocationType: "Event",
+    Payload: JSON.stringify(payload),
   };
   SCVLoggingUtil.debug({
     category: "kvs_trigger.handler",
     message: "Invoke lambda with params",
     context: params,
   });
-  lambda.invokeAsync(params, (err) => {
+  lambda.invoke(params, (err) => {
     if (err) {
       throw err;
     } else if (callback) callback(null, buildResponse());

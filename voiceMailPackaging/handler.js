@@ -9,6 +9,8 @@ const INVOKE_TELEPHONY_INTEGRATION_API_ARN =
   process.env.invoke_telephony_integration_api_arn;
 const RECORDINGS_PREFIX = "voicemail_recordings/";
 const TRANSCRIPTS_PREFIX = "voicemail_transcripts/";
+const MAX_ROUTING_ATTEMPTS = 4;
+const DELAY_BEFORE_ROUTING_SEC = process.env.delay_before_routing_vm_sec || 60;
 
 // This Lambda requires env variables invoke_telephony_integration_api_arn and a triger bridge for S3 inserts
 async function sendMessage(contactId, transcript, initTimestamp, endTimestamp) {
@@ -99,7 +101,7 @@ exports.handler = async (event) => {
   if (!key.endsWith(".json")) {
     return Promise.resolve({ success: true });
   }
-  SCVLoggingUtil.info(`Processing transcript`, key);
+  SCVLoggingUtil.info({ message: `Processing transcript`, context: key });
   const wavKey = key
     .replace(TRANSCRIPTS_PREFIX, RECORDINGS_PREFIX)
     .replace(".json", ".wav");
@@ -156,16 +158,24 @@ exports.handler = async (event) => {
       context: sendMessageResponse,
     });
 
-    // route the VM
-    const routingResponse = await executeOmniFlow(
-      contactId,
-      loadedTags.vm_dialedNumber
-    );
+    // route the VM (up to 4 attempts). 
+    let routingResponse;
+    for (let i = 0; i < MAX_ROUTING_ATTEMPTS; i++) {
+      await new Promise(r => setTimeout(r, DELAY_BEFORE_ROUTING_SEC * 1000));
+      routingResponse = await executeOmniFlow(
+        contactId,
+        loadedTags.vm_dialedNumber
+      );
+      SCVLoggingUtil.info({
+        message: `executeOmniFlow for ${loadedTags.vm_dialedNumber}, attempt ${i+1} out of ${MAX_ROUTING_ATTEMPTS}, delay ${DELAY_BEFORE_ROUTING_SEC} sec`,
+        context: routingResponse,
+      });
+      if (!routingResponse.FunctionError) {
+        break;
+      }
+    }
     result.push(routingResponse);
-    SCVLoggingUtil.info({
-      message: `executeOmniFlow for ${loadedTags.vm_dialedNumber}`,
-      context: routingResponse,
-    });
+
     // close the VM record
     const closeVmResponse = await updateVoiceCallRecord(contactId);
     result.push(closeVmResponse);
