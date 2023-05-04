@@ -28,7 +28,6 @@ function handleError(error, functionName, eventType, errorMessage) {
 
 async function sendMessage(contactId, payload) {
   const jwt = await utils.generateJWT(generateJWTParams);
-
   const responseVal = await axiosWrapper.scrtEndpoint
     .post(`/voiceCalls/${contactId}/messages`, payload, {
       headers: {
@@ -39,25 +38,55 @@ async function sendMessage(contactId, payload) {
     })
     .then((response) => {
       SCVLoggingUtil.info({
-        category: "contactLensConsumer.sendMessage",
+        category: "contactLensProcessor.sendMessage",
         eventType: "TRANSCRIPTION",
         message: "Successfully sent transcript",
-        context: { messageId: payload.messageId },
+        context: { response: response },
       });
-      return response;
     })
     .catch((error) => {
       handleError(
         error,
-        "contactLensConsumer.sendMessage",
+        "contactLensProcessor.sendMessage",
         "TRANSCRIPTION",
         "Error sending transcript"
       );
       // Do not throw error; failing lambda execution will keep Kinesis records in stream
-      return { data: { result: "Error" } };
     });
+  return { data: { result: "Success" } };
+}
 
-  return responseVal.data;
+async function sendMessagesInBulk(payload) {
+  const jwt = await utils.generateJWT(generateJWTParams);
+  const responseVal = await axiosWrapper.scrtEndpoint
+    .post(`/voiceCalls/messages`, payload, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN,
+      },
+    })
+    .then((response) => {
+      SCVLoggingUtil.info({
+        category: "contactLensProcessor.sendMessagesInBulk",
+        eventType: "TRANSCRIPTION",
+        message: "Successfully sent bulk transcripts",
+        context: { response: response },
+      });
+    })
+    .catch((error) => {
+      handleError(
+        error,
+        "contactLensProcessor.sendMessagesInBulk",
+        "TRANSCRIPTION",
+        "Error sending transcripts in bulk"
+      );
+      
+      if (error.response.status === 429) {
+        return { data: { result: "Error" } };
+      }
+    });
+  return { data: { result: "Success" } };
 }
 
 async function sendRealtimeConversationEvents(contactId, payload) {
@@ -72,28 +101,28 @@ async function sendRealtimeConversationEvents(contactId, payload) {
     })
     .then((response) => {
       SCVLoggingUtil.info({
-        category: "contactLensConsumer.sendRealtimeConversationEvents",
+        category: "contactLensProcessor.sendRealtimeConversationEvents",
         eventType: "INTELLIGENCESIGNALS",
         message: "Successfully sent realtime conversation events",
         context: { totalEvents: payload.events.length },
       });
-      return response;
     })
     .catch((error) => {
       handleError(
         error,
-        "contactLensConsumer.sendRealtimeConversationEvents",
-        "INTELLIGENCESIGNALS",
-        "Error sending realtime conversation events"
+        "contactLensProcessor.sendRealtimeConversationEvents",
+        SCVLoggingUtil.EVENT_TYPE.INTELLIGENCESIGNALS,
+        "Error sending realtime conversationevents"
       );
       // Do not throw error; failing lambda execution will keep Kinesis records in stream
-      return { data: { result: "Error" } };
     });
 
-  return responseVal.data;
+ return { data: { result: "Success" } };
 }
+
 
 module.exports = {
   sendMessage,
+  sendMessagesInBulk,
   sendRealtimeConversationEvents,
 };

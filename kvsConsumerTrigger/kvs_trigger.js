@@ -75,7 +75,7 @@ exports.handler = (event, context, callback) => {
 
   const params = {
     // not passing in a ClientContext
-    FunctionName: process.env.INVOKE_KVS_TRANSCRIBER_ARN,
+    FunctionName: process.env.transcriptionFunction,
     // InvocationType is RequestResponse by default
     // LogType is not set so we won't get the last 4K of logs from the invoked function
     // Qualifier is not set so we use $LATEST

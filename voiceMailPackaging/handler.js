@@ -158,16 +158,18 @@ exports.handler = async (event) => {
       context: sendMessageResponse,
     });
 
-    // route the VM (up to 4 attempts). 
+    // route the VM (up to 4 attempts).
     let routingResponse;
     for (let i = 0; i < MAX_ROUTING_ATTEMPTS; i++) {
-      await new Promise(r => setTimeout(r, DELAY_BEFORE_ROUTING_SEC * 1000));
+      await new Promise((r) => setTimeout(r, DELAY_BEFORE_ROUTING_SEC * 1000));
       routingResponse = await executeOmniFlow(
         contactId,
         loadedTags.vm_dialedNumber
       );
       SCVLoggingUtil.info({
-        message: `executeOmniFlow for ${loadedTags.vm_dialedNumber}, attempt ${i+1} out of ${MAX_ROUTING_ATTEMPTS}, delay ${DELAY_BEFORE_ROUTING_SEC} sec`,
+        message: `executeOmniFlow for ${loadedTags.vm_dialedNumber}, attempt ${
+          i + 1
+        } out of ${MAX_ROUTING_ATTEMPTS}, delay ${DELAY_BEFORE_ROUTING_SEC} sec`,
         context: routingResponse,
       });
       if (!routingResponse.FunctionError) {

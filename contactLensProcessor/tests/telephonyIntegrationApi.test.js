@@ -28,6 +28,24 @@ describe('SendMessage API', () => {
   });
 })
 
+describe('SendMessagesInBulk API', () => {
+  it('successfully sends bulk transcripts', async () => {
+    const expectedResponse = { result: 'Success' };
+    utils.generateJWT.mockImplementationOnce(() => Promise.resolve('jwt'));
+    axiosWrapper.scrtEndpoint.post.mockImplementationOnce(() => Promise.resolve({ data: expectedResponse }));
+
+    await expect(await api.sendMessagesInBulk({})).toEqual(expectedResponse);
+  });
+
+  it('handles error when sending transcript', async () => {
+    const expectedResponse = { result: 'Error' };
+    utils.generateJWT.mockImplementationOnce(() => Promise.resolve('jwt'));
+    axiosWrapper.scrtEndpoint.post.mockImplementationOnce(() => Promise.reject(expectedResponse));
+
+    await expect(await api.sendMessage('contactId', {})).toEqual(expectedResponse);
+  });
+})
+
 describe('SendRealtimeConversationEvents API', () => {
   it('successfully sent realtime conversation events', async () => {
     const expectedResponse = { result: 'Success' };

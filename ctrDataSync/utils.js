@@ -1,5 +1,12 @@
 const SCVLoggingUtil = require("./SCVLoggingUtil");
 
+
+const ERROR_DISCONNECT_REASON = [
+    "TELECOM_PROBLEM",
+    "CONTACT_FLOW_DISCONNECT",
+    "OTHER"
+];
+
 /**
  * Filter call attributes to be included in API payload based on prefix and strip prefix
  *
@@ -31,6 +38,10 @@ function transformCTR(ctr) {
   voiceCall.startTime = ctr.InitiationTimestamp;
   voiceCall.endTime = ctr.DisconnectTimestamp;
   voiceCall.parentCallIdentifier = ctr.PreviousContactId;
+  voiceCall.disconnectReason = {
+      value: ctr.DisconnectReason,
+      isError: ERROR_DISCONNECT_REASON.includes(ctr.DisconnectReason)
+  };
 
   if (ctr.Agent) {
     voiceCall.acceptTime = ctr.Agent.ConnectedToAgentTimestamp;
@@ -47,7 +58,8 @@ function transformCTR(ctr) {
 
   if (ctr.InitiationMethod) {
     // Convert API initiationMethod CTR to INBOUND
-    voiceCall.initiationMethod = (ctr.InitiationMethod === 'API' ? 'INBOUND' : ctr.InitiationMethod);
+    voiceCall.initiationMethod =
+      ctr.InitiationMethod === "API" ? "INBOUND" : ctr.InitiationMethod;
     if (
       ctr.InitiationMethod === "OUTBOUND" ||
       ctr.InitiationMethod === "CALLBACK"
