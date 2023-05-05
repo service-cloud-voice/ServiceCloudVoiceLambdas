@@ -2,11 +2,11 @@ const AWS = require("aws-sdk");
 
 AWS.config = {};
 
-const mockInvokeAsync = jest.fn();
+const mockInvoke = jest.fn();
 /*eslint-disable */
 jest.mock("aws-sdk", () => ({
   Lambda: function() {
-    this.invokeAsync = mockInvokeAsync
+    this.invoke = mockInvoke
   },
 }));
 /* eslint-enable */
@@ -55,7 +55,7 @@ describe("Unit tests for kvs_trigger.js", () => {
   };
 
   beforeEach(() => {
-    mockInvokeAsync.mockImplementation(() => ({ lambdaResult: "Success" }));
+    mockInvoke.mockImplementation(() => ({ lambdaResult: "Success" }));
   });
 
   afterEach(() => {
@@ -80,38 +80,41 @@ describe("Unit tests for kvs_trigger.js", () => {
 
   it("should be invoked once", () => {
     myHandler(inputEvent, {}, (err, data) => data);
-    expect(mockInvokeAsync).toHaveBeenCalledTimes(1);
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
   it("should return expected message", () => {
     myHandler(inputEvent, {}, (err, data) => data);
-    expect(mockInvokeAsync()).toStrictEqual({ lambdaResult: "Success" });
+    expect(mockInvoke()).toStrictEqual({ lambdaResult: "Success" });
   });
 
   it("should be called with expected params", () => {
     myHandler(inputEvent, {}, (err, data) => data);
-    let actualParams = mockInvokeAsync.mock.calls[0][0];
-    actualParams = JSON.parse(actualParams.InvokeArgs);
+    let actualParams = mockInvoke.mock.calls[0][0];
+    actualParams = JSON.parse(actualParams.Payload);
     assertParams(actualParams);
+    expect(actualParams.InvocationType === "Event");
     expect(actualParams.engine).toBe("standard");
   });
 
   it("should be called with expected custom params", () => {
     myHandler(inputEventCustom, {}, (err, data) => data);
-    let actualParams = mockInvokeAsync.mock.calls[0][0];
-    actualParams = JSON.parse(actualParams.InvokeArgs);
+    let actualParams = mockInvoke.mock.calls[0][0];
+    actualParams = JSON.parse(actualParams.Payload);
     assertParams(actualParams);
     expect(actualParams.vocabularyName).toBe("VocabName");
     expect(actualParams.vocabularyFilterName).toBe("VocabFilterName");
     expect(actualParams.vocabularyFilterMethod).toBe("MASK");
+    expect(actualParams.InvocationType === "Event");
   });
 
   it("should be called with expected medical params", () => {
     myHandler(inputEventMedical, {}, (err, data) => data);
-    let actualParams = mockInvokeAsync.mock.calls[0][0];
-    actualParams = JSON.parse(actualParams.InvokeArgs);
+    let actualParams = mockInvoke.mock.calls[0][0];
+    actualParams = JSON.parse(actualParams.Payload);
     assertParams(actualParams);
     expect(actualParams.engine).toBe("medical");
     expect(actualParams.specialty).toBe("ONCOLOGY");
+    expect(actualParams.InvocationType === "Event");
   });
 });

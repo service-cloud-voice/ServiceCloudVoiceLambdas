@@ -212,7 +212,7 @@ Resources:
               - '*'
       Layers:
         - Ref: invokeSalesforceRestApiFunctionLayer
-
+  
   KinesisStreamStorageAssociateFunctionRoleResource:
     Type: AWS::IAM::Role
     Properties:
@@ -231,26 +231,29 @@ Resources:
       - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
       Policies:
-      - PolicyName: SCVCTRDataSyncFunctionRolePolicy
+      - PolicyName: SCVConnectConfiguratorRolePolicy
         PolicyDocument:
           Statement:
           - Action:
-            - connect:ListInstanceStorageConfigs
-            - connect:AssociateInstanceStorageConfig
+            - connect:*
+            - kinesis:DescribeStream
+            - iam:PutRolePolicy
+            - iam:PassRole
+            - kms:Decrypt
             Resource:
             - "*"
             Effect: Allow
-      RoleName: "KinesisStreamStorageAssociateFunctionRole"
+      RoleName: !Sub "${CallCenterApiName}-KinesisStreamStorageAssociateFunctionRole"
       
   ContactLensKinesisStreamAssociateFunction:
     DependsOn: KinesisStreamStorageAssociateFunctionRoleResource
-    Type: AWS::Lambda::Function
+    Type: AWS::Lambda::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       Runtime: python3.8
       Handler: index.lambda_handler
       FunctionName: !Sub "${CallCenterApiName}-ContactLensKinesisStreamAssociateFunction"
       Role:
-        Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/KinesisStreamStorageAssociateFunctionRole"
+        Fn::Sub: "arn:aws:iam::${AWS::AccountId}:role/${CallCenterApiName}-KinesisStreamStorageAssociateFunctionRole"
       Code:
         ZipFile:
             !Sub |
@@ -309,7 +312,7 @@ Resources:
                   responseData = {}
                   responseData['Reason'] = reason
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
-        
+                  
   InvokeContactLensKinesisStreamAssociateFunction:
     DependsOn: ContactLensKinesisStreamAssociateFunction
     Type: Custom::InvokeContactLensKinesisStreamAssociateFunction
@@ -322,7 +325,7 @@ Resources:
         - ContactLensKinesisStreamAssociateFunction
         - Arn
       Description: Invoke ContactLensKinesisStreamAssociateFunction
-  
+      
   CTRDataSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -352,6 +355,7 @@ Resources:
               - 'logs:CreateLogStream'
               - 'logs:PutLogEvents'
               - 'lambda:InvokeFunction'
+              - 'kms:Decrypt'
             Resource:
               - '*'
       Environment:
@@ -424,7 +428,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          INVOKE_KVS_TRANSCRIBER_ARN: !GetAtt kvsTranscriber.Arn
+          transcriptionFunction: !GetAtt kvsTranscriber.Arn
           LOG_LEVEL: "info"
       Layers:
         - Ref: kvsConsumerTriggerFunctionLayer
@@ -504,6 +508,7 @@ Resources:
                   - "transcribe:StartMedicalStreamTranscription"
                   - "transcribe:StartTranscriptionJob"
                   - "transcribe:StartMedicalTranscriptionJob"
+                  - "kms:Decrypt"
                 Resource: 
                   - "*"
               -
@@ -596,6 +601,7 @@ Resources:
                   - "ssm:Describe*"
                   - "ssm:Get*"
                   - "ssm:List*"
+                  - "kms:Decrypt"
                 Resource:
                   - "*"
                 Effect: Allow
@@ -605,6 +611,58 @@ Resources:
     Properties:
       ShardCount: 1
 
+  ContactLensProcessorFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: ContactLensProcessorFunctionLayer
+      Description: ContactLensProcessorFunctionLayer node modules
+      ContentUri: layers/contactLensProcessorFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs14.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: nodejs14.x
+
+  ContactLensProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: contactLensProcessor/
+      Handler: handler.handler
+      Runtime: nodejs14.x
+      AutoPublishAlias: active
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${ScrtEndpointUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          USE_SSM_LAMBDA_EXTENSION: false
+          SSM_PARAMETER_STORE_TTL: 60
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - "kinesis:DescribeStream"
+                - "kinesis:DescribeStreamSummary"
+                - "kinesis:GetRecords"
+                - "kinesis:GetShardIterator"
+                - "kinesis:ListShards"
+                - "kinesis:ListStreams"
+                - "kinesis:SubscribeToShard"
+                - "logs:CreateLogGroup"
+                - "logs:CreateLogStream"
+                - "logs:PutLogEvents"
+                - "lambda:InvokeFunction"
+                - "ssm:Describe*"
+                - "ssm:Get*"
+                - "ssm:List*"
+              Resource:
+                - '*'
+      Timeout: 180
+      Layers:
+        - Ref: ContactLensProcessorFunctionLayer
+        
   ContactLensConsumerFunctionLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -625,12 +683,14 @@ Resources:
       Handler: handler.handler
       Runtime: nodejs14.x
       AutoPublishAlias: active
+      MemorySize: 256
       Environment:
         Variables:
           PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
           SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
           SCRT_ENDPOINT_BASE: !Sub "${ScrtEndpointUrl}"
           CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          CONTACT_LENS_PROCESSOR_FUNCTION_ARN: !Ref ContactLensProcessorFunction.Alias
           LOG_LEVEL: "info"
       Policies:
         - Statement:
@@ -650,16 +710,18 @@ Resources:
               - "ssm:Describe*"
               - "ssm:Get*"
               - "ssm:List*"
+              - "kms:Decrypt"
             Resource:
               - '*'
+      Timeout: 60
       Layers:
         - Ref: ContactLensConsumerFunctionLayer
 
   ContactLensConsumerFunctionStream:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
-      ParallelizationFactor: 10
-      BatchSize: 1
+      ParallelizationFactor: 4
+      BatchSize: 5
       MaximumBatchingWindowInSeconds: 1
       FunctionName:
         Ref: ContactLensConsumerFunction
@@ -669,7 +731,7 @@ Resources:
           - Arn
       StartingPosition: TRIM_HORIZON
       BisectBatchOnFunctionError: true
-      MaximumRetryAttempts: 1
+      MaximumRetryAttempts: 0
 
   ContactEventsRule:
     Type: 'AWS::Events::Rule'
@@ -1440,6 +1502,9 @@ Outputs:
   ContactLensConsumerFunctionIamRole:
     Description: "Implicit IAM Role created for ContactLensConsumerFunction"
     Value: !GetAtt ContactLensConsumerFunctionRole.Arn
+  ContactLensProcessorFunction:
+    Description: ContactLensProcessorFunction Lambda Function ARN
+    Value: !GetAtt ContactLensProcessorFunction.Arn
 
 
 Metadata:
@@ -1452,4 +1517,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 11.0.0
+    SemanticVersion: 12.0.0

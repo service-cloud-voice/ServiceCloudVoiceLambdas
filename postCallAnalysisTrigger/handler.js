@@ -115,7 +115,7 @@ exports.handler = async (event) => {
           .toString(),
         startTime,
         endTime,
-        participant: transcriptPayload.ParticipantId
+        participant: transcriptPayload.ParticipantId,
       });
     });
   }

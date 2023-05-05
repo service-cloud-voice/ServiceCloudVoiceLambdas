@@ -10,6 +10,7 @@ describe('transformCTR', () => {
         "DisconnectTimestamp":"2020-08-07T06:09:41Z",
         "PreviousContactId":"0eeeb618-d2a9-46ce-9ad9-0c76a60cff8e",
         "InitiationMethod":"TRANSFER",
+        "DisconnectReason": "TELECOM_PROBLEM",
         "Recording":{
             "Location":"abc.com"
         },
@@ -44,7 +45,11 @@ describe('transformCTR', () => {
             "enqueueTime":"2020-08-07T06:09:34Z",
             "queue":"Test",
             "recordingLocation":"abc.com",
-            "callAttributes": "{\"sf_realtime_transcription_status\":\"passed\",\"UserInputNum__c\":10}"
+            "callAttributes": "{\"sf_realtime_transcription_status\":\"passed\",\"UserInputNum__c\":10}",
+            "disconnectReason": {
+                "value": "TELECOM_PROBLEM",
+                "isError": true
+            }
         }
     }
     it('should transform raw CTR data to voicecall like JSON', () => {
@@ -55,12 +60,17 @@ describe('transformCTR', () => {
         "ContactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
         "InitiationTimestamp":undefined,
         "DisconnectTimestamp":"2020-08-07T06:09:41Z",
+        "DisconnectReason": "AGENT_HUNGUP",
         "queue":null
     };
     let expected2 = {
         "contactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
         "fields":{
-            "endTime":"2020-08-07T06:09:41Z"
+            "endTime":"2020-08-07T06:09:41Z",
+            "disconnectReason": {
+                "value": "AGENT_HUNGUP",
+                "isError": false
+            }
         }
     };
     it('should remove key with undefined value', () => {
@@ -69,12 +79,17 @@ describe('transformCTR', () => {
 
     let input3 = {
         "ContactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
+        "DisconnectReason": "AGENT_HUNGUP",
         "InitiationMethod":"API"
     };
     let expected3 = {
         "contactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
         "fields":{
-            "initiationMethod":"INBOUND"
+            "initiationMethod":"INBOUND",
+            "disconnectReason": {
+                "value": "AGENT_HUNGUP",
+                "isError": false
+            }
         }
     };
     let actual3 = utils.transformCTR(input3);

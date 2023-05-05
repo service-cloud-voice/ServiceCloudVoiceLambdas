@@ -41,13 +41,17 @@ exports.handler = async (event) => {
       };
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Invoke Create VoiceCall request with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Invoke Create VoiceCall request with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: voiceCallFieldValues,
       });
       result = await api.createVoiceCall(voiceCallFieldValues);
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Response received from Create VoiceCall with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Response received from Create VoiceCall with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: result,
       });
       break;
@@ -56,7 +60,9 @@ exports.handler = async (event) => {
       result = await api.updateVoiceCall(contactId, fieldValues);
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Response received from update voiceCall with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Response received from update voiceCall with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: result,
       });
       break;
@@ -81,13 +87,17 @@ exports.handler = async (event) => {
       }
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Invoke Create TransferVC request with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Invoke Create TransferVC request with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: voiceCallFieldValues,
       });
       result = await api.createVoiceCall(voiceCallFieldValues);
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Response received from Create TransferVC with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Response received from Create TransferVC with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: result,
       });
       break;
@@ -124,7 +134,9 @@ exports.handler = async (event) => {
     case "cancelOmniFlowExecution":
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Invoke cancel Omni Flow request with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Invoke cancel Omni Flow request with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: event.Details.Parameters.ContactId,
       });
       result = await api.cancelOmniFlowExecution(
@@ -132,7 +144,9 @@ exports.handler = async (event) => {
       );
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Response received from cancel Omni Flow with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Response received from cancel Omni Flow with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: result,
       });
       break;
@@ -140,13 +154,17 @@ exports.handler = async (event) => {
       fieldValues.callCenterApiName = config.callCenterApiName;
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Invoke sendMessage with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Invoke sendMessage with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: fieldValues,
       });
       result = await api.sendMessage(contactId, fieldValues);
       SCVLoggingUtil.debug({
         category: "invokeTelephonyIntegrationApi.handler.handler",
-        message: `Response received for sendMessage with ${contactId || event.Details.ContactData.ContactId}`,
+        message: `Response received for sendMessage with ${
+          contactId || event.Details.ContactData.ContactId
+        }`,
         context: result,
       });
       break;

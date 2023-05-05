@@ -1,4 +1,5 @@
 const utils = require('../utils');
+const config = require('../config');
 
 jest.mock('jsonwebtoken');
 const jwt = require('jsonwebtoken');

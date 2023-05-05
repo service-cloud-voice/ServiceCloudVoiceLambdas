@@ -175,17 +175,11 @@ exports.handler = async (event) => {
 
     // Iterate through the attributes to get the tags
     try {
-      const attrData = vmrecord.Attributes;
       attrTagContainer += `vm_dialedNumber=${encodeURIComponent(
         vmrecord.SystemEndpoint.Address
       )}&vm_initTimestamp=${encodeURIComponent(
         vmrecord.InitiationTimestamp
       )}&vm_endTimestamp=${encodeURIComponent(vmrecord.DisconnectTimestamp)}&`;
-      Object.keys(attrData).forEach((key) => {
-        if (key.startsWith("vm_")) {
-          attrTagContainer += `${key}=${encodeURIComponent(attrData[key])}&`;
-        }
-      });
       attrTagContainer = attrTagContainer.replace(/&\s*$/, "");
     } catch (e) {
       SCVLoggingUtil.error({

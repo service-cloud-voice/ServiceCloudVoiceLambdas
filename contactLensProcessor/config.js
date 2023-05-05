@@ -4,5 +4,6 @@ module.exports = {
   scrtEndpointBase: process.env.SCRT_ENDPOINT_BASE,
   privateKeyParamName: process.env.PRIVATE_KEY_PARAM_NAME,
   callCenterApiName: process.env.CALL_CENTER_API_NAME,
-  tokenValidFor: "5m", // JWT token valid duration.
+  tokenValidFor: "15m", // JWT token valid duration.
+  useSSMLambdaExtension: process.env.USE_SSM_LAMBDA_EXTENSION,
 };
