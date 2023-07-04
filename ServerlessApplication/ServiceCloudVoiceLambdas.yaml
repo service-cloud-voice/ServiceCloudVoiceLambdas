@@ -1449,7 +1449,7 @@ Resources:
           invoke_telephony_integration_api_arn: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
           LOG_LEVEL: "info"
       Role: !GetAtt VoiceMailPackagingFunctionRole.Arn
-      Timeout: 60
+      Timeout: 300
       Layers:
         - Ref: VoiceMailPackagingFunctionLayer
 
