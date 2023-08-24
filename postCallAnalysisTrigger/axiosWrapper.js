@@ -1,11 +1,23 @@
 const axios = require("axios");
 const axiosRetry = require("axios-retry");
+const logger = require("axios-logger");
 const config = require("./config");
 const SCVLoggingUtil = require("./SCVLoggingUtil");
 
 const scrtEndpoint = axios.create({
   baseURL: config.scrtEndpointBase,
 });
+
+if (process.env.LOG_LEVEL === "debug") {
+  scrtEndpoint.interceptors.request.use(
+    logger.requestLogger,
+    logger.errorLogger
+  );
+  scrtEndpoint.interceptors.response.use(
+    logger.responseLogger,
+    logger.errorLogger
+  );
+}
 
 // Retry Config
 axiosRetry(scrtEndpoint, {
@@ -20,53 +32,11 @@ axiosRetry(scrtEndpoint, {
   onRetry: (retryCount, error) => {
     // for metrics logging purpose
     SCVLoggingUtil.debug({
-      category: "axiosWrapper.axiosRetry",
-      message: `Retrying a failed request with error: ${error}. Retry count: ${retryCount} (maximum is 3)`,
+      message: `Retrying a failed request with error. Retry count: ${retryCount} (maximum is 3)`,
+      context: { payload: error },
     });
   },
 });
-
-scrtEndpoint.interceptors.request.use(
-  (x) => {
-    SCVLoggingUtil.info({
-      category: "telephonyIntegrationApi.persistSignals",
-      message: x,
-      context: [],
-      eventType: "SCV_REQUEST",
-    });
-    return x;
-  },
-  (err) => {
-    SCVLoggingUtil.error({
-      category: "telephonyIntegrationApi.persistSignals",
-      message: err,
-      context: [],
-      eventType: "SCV_REQUEST_ERROR",
-    });
-    return err;
-  }
-);
-
-scrtEndpoint.interceptors.response.use(
-  (x) => {
-    SCVLoggingUtil.info({
-      category: "telephonyIntegrationApi.persistSignals",
-      message: x,
-      context: [],
-      eventType: "SCV_RESPONSE",
-    });
-    return x;
-  },
-  (err) => {
-    SCVLoggingUtil.error({
-      category: "telephonyIntegrationApi.persistSignals",
-      message: err,
-      context: [],
-      eventType: "SCV_RESPONSE_ERROR",
-    });
-    return err;
-  }
-);
 
 module.exports = {
   scrtEndpoint,

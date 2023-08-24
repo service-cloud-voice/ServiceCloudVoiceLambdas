@@ -5,11 +5,15 @@ const lambda = new aws.Lambda();
 const utils = require("./utils");
 
 function cancelOmniFlowExecution(contactId) {
+  SCVLoggingUtil.info({
+    message: "HandleContactEvents Request created",
+    context: { contactId: contactId },
+  });
   const payload = {
     Details: {
       Parameters: {
         methodName: "cancelOmniFlowExecution",
-        ContactId: contactId,
+        contactId: contactId,
       },
     },
   };
@@ -24,16 +28,13 @@ function cancelOmniFlowExecution(contactId) {
 exports.handler = async (event) => {
   const clearPsrPromises = [];
   SCVLoggingUtil.debug({
-    category: "handleContactEvent.handler",
-    message: "Received event",
+    message: "HandleContactEvents event received",
     context: event,
   });
   if (utils.isDisconnectedEventForAbandonedCall(event)) {
     SCVLoggingUtil.info({
-      category: "handleContactEvents.handler",
-      eventType: "VOICECALL",
       message: "Amazon Connect Contact Disconnected Event",
-      context: event,
+      context: { contactId: event.detail.contactId, payload: event },
     });
 
     const clearPsrPromise = cancelOmniFlowExecution(event.detail.contactId);
@@ -41,8 +42,6 @@ exports.handler = async (event) => {
     clearPsrPromise.then((response) => {
       SCVLoggingUtil.info({
         message: "cancelOmniFlowExecution response",
-        eventType: "VOICECALL",
-        category: "handleContactEventsLambda handler",
         context: response,
       });
     });

@@ -5,6 +5,10 @@ const lambda = new aws.Lambda();
 const utils = require("./utils");
 
 function updateVoiceCallRecord(voiceCall) {
+  SCVLoggingUtil.info({
+    message: "CTR/updateVoiceCallRecord Request created",
+    context: { contactId: voiceCall.contactId },
+  });
   const payload = {
     Details: {
       Parameters: {
@@ -25,50 +29,46 @@ function updateVoiceCallRecord(voiceCall) {
 
 function shouldProcessCtr(ctrRecord) {
   return (
-    ctrRecord.InitiationMethod === "INBOUND" ||
-    ctrRecord.InitiationMethod === "OUTBOUND" ||
-    ctrRecord.InitiationMethod === "TRANSFER" ||
-    ctrRecord.InitiationMethod === "CALLBACK" ||
-    ctrRecord.InitiationMethod === "API"
+    ["INBOUND", "OUTBOUND", "TRANSFER", "CALLBACK", "API"].includes(
+      ctrRecord.InitiationMethod
+    ) &&
+    ctrRecord.ContactId &&
+    // if the call is a voicemail, no need to process it since the packager lambda will update the voicecall record
+    !(
+      ctrRecord.Attributes &&
+      ctrRecord.Attributes.vm_flag &&
+      ctrRecord.Recordings
+    )
   );
 }
 
 exports.handler = async (event) => {
   const promises = [];
   SCVLoggingUtil.debug({
-    category: "ctrDataSync.handler",
-    message: "Received event",
+    message: "CTRDataSync event received",
     context: event,
   });
   event.Records.forEach((record) => {
     const ctr = utils.parseData(record.kinesis.data);
     if (shouldProcessCtr(ctr)) {
-      const isVM = ctr.Attributes && ctr.Attributes.vm_flag;
-      // if the ctr data sync has the Voicemail flag, no need to process it since the packager lambda will update the voicecall record
-      if (ctr.ContactId && !isVM) {
-        const voiceCall = utils.transformCTR(ctr);
-        SCVLoggingUtil.debug({
-          category: "ctrDataSync.handler",
-          message: "Transformed CTR to voice call",
-          context: voiceCall,
-        });
-        const updatePromise = updateVoiceCallRecord(voiceCall);
+      const voiceCall = utils.transformCTR(ctr);
+      SCVLoggingUtil.debug({
+        category: "ctrDataSync.handler",
+        message: "Transformed CTR to voice call",
+        context: voiceCall,
+      });
+      const updatePromise = updateVoiceCallRecord(voiceCall);
 
-        promises.push(updatePromise);
+      promises.push(updatePromise);
 
-        updatePromise.then((response) => {
-          SCVLoggingUtil.info({
-            category: "CTRSyncLambda handler",
-            eventType: "VOICECALL",
-            message: "updateVoiceCallRecord response",
-            context: response,
-          });
+      updatePromise.then((response) => {
+        SCVLoggingUtil.info({
+          message: "updateVoiceCallRecord response",
+          context: response,
         });
-      }
+      });
     } else {
       SCVLoggingUtil.error({
-        category: "updateVoiceCallRecord response",
-        eventType: "VOICECALL",
         message: "Encountered Non supported CTR Events: failing fast",
         context: {},
       });
@@ -77,3 +77,5 @@ exports.handler = async (event) => {
 
   return Promise.all(promises);
 };
+
+exports.shouldProcessCtr = shouldProcessCtr;

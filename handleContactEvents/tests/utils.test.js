@@ -22,8 +22,8 @@ describe('isDisconnectedEventForAbandonedCall', () => {
             } 
     };
 
-    it('Should not qualify for clearPSR', () => {
-        expect(utils.isDisconnectedEventForAbandonedCall(input1)).toStrictEqual(false);
+    it('Should qualify for clearPSR with no queue info', () => {
+        expect(utils.isDisconnectedEventForAbandonedCall(input1)).toStrictEqual(true);
     });
 
     let input2 = { 

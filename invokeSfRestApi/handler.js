@@ -26,8 +26,7 @@ exports.handler = async (event) => {
     event.Details.Parameters;
 
   SCVLoggingUtil.debug({
-    category: "invokeSfRestApi.handler.handler",
-    message: "Received event",
+    message: "InvokeSFRestApi event received",
     context: event,
   });
   switch (methodName) {
@@ -71,10 +70,8 @@ exports.handler = async (event) => {
     }
     default: {
       SCVLoggingUtil.warn({
-        category: "invokeSfRestApi.handler.handler",
-        eventType: "VOICECALL",
         message: "Unsupported method",
-        context: {},
+        context: { payload: event },
       });
       throw new Error(`Unsupported method: ${methodName}`);
     }

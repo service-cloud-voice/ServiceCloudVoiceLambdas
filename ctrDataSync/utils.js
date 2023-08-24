@@ -1,10 +1,9 @@
 const SCVLoggingUtil = require("./SCVLoggingUtil");
 
-
 const ERROR_DISCONNECT_REASON = [
-    "TELECOM_PROBLEM",
-    "CONTACT_FLOW_DISCONNECT",
-    "OTHER"
+  "TELECOM_PROBLEM",
+  "CONTACT_FLOW_DISCONNECT",
+  "OTHER",
 ];
 
 /**
@@ -39,8 +38,8 @@ function transformCTR(ctr) {
   voiceCall.endTime = ctr.DisconnectTimestamp;
   voiceCall.parentCallIdentifier = ctr.PreviousContactId;
   voiceCall.disconnectReason = {
-      value: ctr.DisconnectReason,
-      isError: ERROR_DISCONNECT_REASON.includes(ctr.DisconnectReason)
+    value: ctr.DisconnectReason,
+    isError: ERROR_DISCONNECT_REASON.includes(ctr.DisconnectReason),
   };
 
   if (ctr.Agent) {
@@ -101,10 +100,8 @@ function transformCTR(ctr) {
   });
 
   SCVLoggingUtil.info({
-    category: "ctrDataSync.handler.transformCTR",
-    eventType: "VOICECALL",
     message: "transform CTR data",
-    context: { CONTACT_ID: ctr.ContactId },
+    context: { contactId: ctr.ContactId },
   });
   return { contactId: ctr.ContactId, fields: voiceCall };
 }

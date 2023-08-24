@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "jest": "28.1.0",
-    "aws-sdk": "2.814.0"
+    "aws-sdk": "2.1354.0"
   },
   "scripts": {
     "test": "jest --collect-coverage"

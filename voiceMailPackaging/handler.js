@@ -14,6 +14,10 @@ const DELAY_BEFORE_ROUTING_SEC = process.env.delay_before_routing_vm_sec || 60;
 
 // This Lambda requires env variables invoke_telephony_integration_api_arn and a triger bridge for S3 inserts
 async function sendMessage(contactId, transcript, initTimestamp, endTimestamp) {
+  SCVLoggingUtil.info({
+    message: "VoiceMailPackaging sendMessage Request created",
+    context: { contactId: contactId },
+  });
   const payload = {
     Details: {
       Parameters: {
@@ -45,6 +49,10 @@ async function updateVoiceCallRecord(
   startTime,
   endTime
 ) {
+  SCVLoggingUtil.info({
+    message: "VoiceMailPackaging updateVoiceCallRecord Request created",
+    context: { contactId: contactId },
+  });
   const fieldValues = isActiveCall
     ? {
         recordingLocation,
@@ -72,6 +80,10 @@ async function updateVoiceCallRecord(
 }
 
 async function executeOmniFlow(contactId, dialedNumber) {
+  SCVLoggingUtil.info({
+    message: "VoiceMailPackaging executeOmniFlow Request created",
+    context: { contactId: contactId },
+  });
   const payload = {
     Details: {
       Parameters: {
@@ -90,9 +102,8 @@ async function executeOmniFlow(contactId, dialedNumber) {
 
 exports.handler = async (event) => {
   SCVLoggingUtil.debug({
-    category: "voiceMailPackaging.handler.handler",
-    message: "Received event",
-    context: event,
+    message: "VoiceMailPackaging event received",
+    context: { payload: event },
   });
   const result = [];
   const eventRecord = event.detail;
@@ -101,7 +112,7 @@ exports.handler = async (event) => {
   if (!key.endsWith(".json")) {
     return Promise.resolve({ success: true });
   }
-  SCVLoggingUtil.info({ message: `Processing transcript`, context: key });
+  SCVLoggingUtil.debug({ message: `Processing transcript`, context: key });
   const wavKey = key
     .replace(TRANSCRIPTS_PREFIX, RECORDINGS_PREFIX)
     .replace(".json", ".wav");
@@ -143,7 +154,7 @@ exports.handler = async (event) => {
     result.push(vmCreationResponse);
     SCVLoggingUtil.info({
       message: `updateVoiceCallRecord to create VM for ${contactId}`,
-      context: vmCreationResponse,
+      context: { contactId: contactId, payload: vmCreationResponse },
     });
     // send the transcript
     const sendMessageResponse = await sendMessage(
@@ -154,8 +165,8 @@ exports.handler = async (event) => {
     );
     result.push(sendMessageResponse);
     SCVLoggingUtil.info({
-      message: `sendMessage`,
-      context: sendMessageResponse,
+      message: `sendMessage for the voiceMail transcript`,
+      context: { contactId: contactId, payload: sendMessageResponse },
     });
 
     // route the VM (up to 4 attempts).
@@ -170,7 +181,7 @@ exports.handler = async (event) => {
         message: `executeOmniFlow for ${loadedTags.vm_dialedNumber}, attempt ${
           i + 1
         } out of ${MAX_ROUTING_ATTEMPTS}, delay ${DELAY_BEFORE_ROUTING_SEC} sec`,
-        context: routingResponse,
+        context: { contactId: contactId, payload: routingResponse },
       });
       if (!routingResponse.FunctionError) {
         break;
@@ -183,7 +194,7 @@ exports.handler = async (event) => {
     result.push(closeVmResponse);
     SCVLoggingUtil.info({
       message: `updateVoiceCallRecord to close record`,
-      context: closeVmResponse,
+      context: { contactId: contactId, payload: closeVmResponse },
     });
     // Finally, delete the transcription job
     result.push(
@@ -196,13 +207,14 @@ exports.handler = async (event) => {
 
     SCVLoggingUtil.info({
       message: `voiceMailPackager handler completed successfully`,
+      context: { payload: result },
     });
     return result;
-  } catch (e) {
+  } catch (err) {
     SCVLoggingUtil.error({
       message: `voiceMailPackager handler failed for contactID ${contactId}`,
-      context: e,
+      context: { payload: err },
     });
-    throw e;
+    throw err;
   }
 };

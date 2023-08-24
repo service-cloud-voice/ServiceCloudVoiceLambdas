@@ -22,7 +22,7 @@ function getSnsEventPayload(snsMessage) {
         Severity: getSeverity(snsMessage),
         Payload: `${
           snsMessage.NewStateReason
-        }Trigger condition: ${JSON.stringify(snsMessage.Trigger)}`,
+        } Trigger condition: ${JSON.stringify(snsMessage.Trigger)}`,
         EventDateTime: snsMessage.StateChangeTime
           ? new Date(snsMessage.StateChangeTime).toISOString()
           : new Date().toISOString(),
@@ -62,10 +62,9 @@ const sendEvent = async (event) => {
     Payload: JSON.stringify(eventPayload),
   };
 
-  SCVLoggingUtil.debug({
-    category: "realtimeAlert.handler.handler",
-    message: "Invoke lambda with params",
-    context: params,
+  SCVLoggingUtil.info({
+    message: "RealTimeAlert SendEvent with params",
+    context: { payload: params },
   });
   return lambda.invoke(params).promise();
 };
@@ -73,31 +72,12 @@ const sendEvent = async (event) => {
 // --------------- Main handler -----------------------
 exports.handler = async (event) => {
   SCVLoggingUtil.debug({
-    category: "realtimeAlert.handler.handler",
-    message: "Received event",
-    context: event,
+    message: "Realtime Alert event received",
+    context: { payload: event },
   });
   const result = await sendEvent(event);
-  SCVLoggingUtil.debug({
-    category: "realtimeAlert.handler.handler",
-    message: "Sent Event response",
-    context: result,
+  SCVLoggingUtil.info({
+    message: "RealTime Alert Event response received",
+    context: { payload: result },
   });
-  const sendRealtimeAlertEventResult = JSON.parse(result.Payload);
-  if (sendRealtimeAlertEventResult.success) {
-    SCVLoggingUtil.info({
-      category: "realtimeAlert.handler.handler",
-      eventType: "MONITORING",
-      message: JSON.stringify(sendRealtimeAlertEventResult),
-      context: null,
-    });
-  } else {
-    SCVLoggingUtil.error({
-      category: "realtimeAlert.handler.handler",
-      eventType: "MONITORING",
-      message: JSON.stringify(sendRealtimeAlertEventResult),
-      context: null,
-    });
-    throw new Error(`${sendRealtimeAlertEventResult.errorMessage}`);
-  }
 };

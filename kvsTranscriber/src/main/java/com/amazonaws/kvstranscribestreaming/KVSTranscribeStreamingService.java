@@ -75,7 +75,7 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
                     request.getAudioStartTimestamp(), request.getCustomerPhoneNumber(), request.isStreamAudioFromCustomer(), request.isStreamAudioToCustomer(), request.getEngine(),
                     request.getVocabularyName(), request.getVocabularyFilterName(), request.getVocabularyFilterMethod(), request.getSpecialty());
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "End Handle Request", loggingContext);
-            
+
             return "{ \"result\": \"Success\" }";
         } catch (Exception e) {
          	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), loggingContext);
@@ -112,12 +112,12 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
             kvsStreamTrackObjectToCustomer = getKVSStreamTrackObject(streamName, startFragmentNum, KVSUtils.TrackName.AUDIO_TO_CUSTOMER.getName(), voiceCallId);
         }
         SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Initialize Transcribe client ", null);
-        
+
         try (TranscribeStreamingRetryClient client = new TranscribeStreamingRetryClient(getTranscribeCredentials(), TRANSCRIBE_ENDPOINT, TRANSCRIBE_REGION, metricsUtil)) {
             CompletableFuture<Void> fromCustomerResult = null;
             CompletableFuture<Void> toCustomerResult = null;
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "END Initialize Transcribe client ", null);
-            
+
             if (kvsStreamTrackObjectFromCustomer != null) {
             	SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getStartStreamingTranscriptionFuture", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Get Transcribing Future for FROM_CUSTOMER stream", null);
                 fromCustomerResult = getStartStreamingTranscriptionFuture(kvsStreamTrackObjectFromCustomer,
@@ -145,7 +145,7 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
          	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
         } catch (Exception e) {
          	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
-            throw e;	
+            throw e;
         }
         SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "END KVS Transcribe Streaming", null);
     }
@@ -163,14 +163,14 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
     private KVSStreamTrackObject getKVSStreamTrackObject(String streamName, String startFragmentNum, String trackName,
                                                          String contactId) throws FileNotFoundException {
     	SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getKVSStreamTrackObject", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START Get KVS Stream Tracking Object for Track " + trackName, null);
-        
+
         InputStream kvsInputStream = KVSUtils.getInputStreamFromKVS(streamName, REGION, startFragmentNum, getAWSCredentials(), START_SELECTOR_TYPE);
         StreamingMkvReader streamingMkvReader = StreamingMkvReader.createDefault(new InputStreamParserByteSource(kvsInputStream));
 
         FragmentMetadataVisitor.BasicMkvTagProcessor tagProcessor = new FragmentMetadataVisitor.BasicMkvTagProcessor();
         FragmentMetadataVisitor fragmentVisitor = FragmentMetadataVisitor.create(Optional.of(tagProcessor));
         SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.getKVSStreamTrackObject", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "END Get KVS Stream Tracking Object for Track " + trackName, null);
-        
+
         return new KVSStreamTrackObject(kvsInputStream, streamingMkvReader, tagProcessor, fragmentVisitor, trackName);
     }
 

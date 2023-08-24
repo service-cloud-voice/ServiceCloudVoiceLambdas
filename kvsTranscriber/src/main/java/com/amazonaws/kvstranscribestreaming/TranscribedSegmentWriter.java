@@ -74,12 +74,12 @@ public class TranscribedSegmentWriter {
         List<Result> results = transcriptEvent.transcript().results();
         if (results.size() > 0) {
             Result result = results.get(0);
-            
+
             // save the result when it is not partial
             if (!result.isPartial() && result.alternatives().size() > 0 && !result.alternatives().get(0).transcript().isEmpty()) {
                 String message = result.alternatives().get(0).transcript();
                 String messageId = result.resultId();
-                
+
                 // audioStartTimeStamp: passed from JS lambda, which in millisecond (long, like 1584048369054)
                 // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333) 
                 // we need to create startTime and endTime as timestamp in mill-seconds   
@@ -96,12 +96,12 @@ public class TranscribedSegmentWriter {
         List<MedicalResult> results = transcriptEvent.transcript().results();
         if (results.size() > 0) {
             MedicalResult result = results.get(0);
-            
+
             // save the result when it is not partial
             if (!result.isPartial() && result.alternatives().size() > 0 && !result.alternatives().get(0).transcript().isEmpty()) {
                 String message = result.alternatives().get(0).transcript();
                 String messageId = result.resultId();
-                
+
                 // audioStartTimeStamp: passed from JS lambda, which in millisecond (long, like 1584048369054)
                 // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333) 
                 // we need to create startTime and endTime as timestamp in mill-seconds   
@@ -126,10 +126,10 @@ public class TranscribedSegmentWriter {
             // get sender type and sender
             String senderType = this.isFromCustomer ? END_USER : VIRTUAL_AGENT;
             String sender = this.isFromCustomer ? customerPhoneNumber : voiceCallId;
-            
+
             // get JWT token
             String jwtToken = this.getJWTToken();
-            
+
             JSONObject sendMessagePayload = new JSONObject();
             sendMessagePayload.put("participantId", sender);
             sendMessagePayload.put("messageId", messageId);
@@ -139,7 +139,7 @@ public class TranscribedSegmentWriter {
             sendMessagePayload.put("senderType", senderType);
 
             URL url = new URL(SCRT_ENDPOINT_BASE + "/voiceCalls/" + voiceCallId + "/messages/");
-            
+
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("POST");
             con.setRequestProperty("Authorization", "Bearer " + jwtToken);
@@ -147,14 +147,14 @@ public class TranscribedSegmentWriter {
             con.setRequestProperty("Accept", "application/json");
             con.setRequestProperty("Telephony-Provider-Name", "amazon-connect");
             con.setDoOutput(true);
-                        
+
             try (OutputStream os = con.getOutputStream()) {
                 OutputStreamWriter osw = new OutputStreamWriter(os, "UTF-8");
                 sendMessagePayload.writeJSONString(osw);
                 osw.close();
             }
             int code = con.getResponseCode();
-            
+
             // logging the response
             HashMap<String, String> loggingContextMap = new HashMap<String, String>();
             loggingContextMap.put(SCVLoggingUtil.TRANSCRIPTION_CONTEXT_KEY.RESPONSE_CODE.toString(),  String.valueOf(code));
@@ -163,19 +163,19 @@ public class TranscribedSegmentWriter {
             loggingContextMap.put(SCVLoggingUtil.TRANSCRIPTION_CONTEXT_KEY.END_TIME.toString(), String.valueOf(endTime));
             loggingContextMap.put(SCVLoggingUtil.TRANSCRIPTION_CONTEXT_KEY.END_POINT.toString(),  SCRT_ENDPOINT_BASE + "/voiceCalls/" + voiceCallId + "/messages/");
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.sendMessage", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, con.getResponseMessage(), loggingContextMap);
-            
+
             if (code == 429) {
                 // Update the Contact Attribute with the specific limits error
                 ConnectClient client  = ConnectClient.create();
                 Map<String, String> attribsMap = new HashMap<String, String>();
                 attribsMap.put("sf_realtime_transcription_status", "Exceeded Limits for creating messages in Transcription");
-                
+
                 UpdateContactAttributesRequest updateContactAttributesRequest = UpdateContactAttributesRequest.builder()
                         .initialContactId(voiceCallId)
                         .instanceId(instanceARN)
                         .attributes(attribsMap)
                         .build();
-                  
+
                 client.updateContactAttributes(updateContactAttributesRequest);
             }
         } catch (Exception e) {
@@ -202,7 +202,7 @@ public class TranscribedSegmentWriter {
         } catch (Exception e) {
             // skip: go next block of code and regenerate token
         }
-        
+
         // get private key from AWS SSM system
         AWSSimpleSystemsManagement client = AWSSimpleSystemsManagementClientBuilder.defaultClient();
         GetParameterRequest getparameterRequest = new GetParameterRequest().withName(PRIVATE_KEY_PARAM_NAME).withWithDecryption(true);
@@ -219,12 +219,12 @@ public class TranscribedSegmentWriter {
         this.privKeyObject = kf.generatePrivate(keySpec);
 
         // generate JWT token which will be used for authentication and set to this.jwtToken
-        Instant now = Instant.now();            
+        Instant now = Instant.now();
         this.jwtToken = Jwts.builder().setAudience(AUDIENCE).setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(now.plus(5L, ChronoUnit.MINUTES))).setIssuer(SALESFORCE_ORG_ID)
                 .setSubject(CALL_CENTER_API_NAME).setId(UUID.randomUUID().toString())
                 .signWith(SignatureAlgorithm.RS256, privKeyObject).compact();
-        
+
         SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.getJWTToken", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "END Get JWT Token", null);
         return this.jwtToken;
      }

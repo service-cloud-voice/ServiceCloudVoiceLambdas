@@ -39,6 +39,7 @@ function putSSMParameter(name, value) {
 function generateJWT(payload, expiresIn, privateKey) {
   const options = {
     algorithm: "RS256",
+    allowInsecureKeySizes: true,
     expiresIn,
     jwtid: uuid(),
   };
