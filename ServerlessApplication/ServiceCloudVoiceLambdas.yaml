@@ -73,11 +73,11 @@ Resources:
       Description: ctrDataSyncFunction npm package
       ContentUri: layers/ctrDataSyncFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   handleContactEventsFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -86,11 +86,11 @@ Resources:
       Description: handleContactEventsFunction npm package
       ContentUri: layers/handleContactEventsFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   authKeysSSMUtilFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -99,11 +99,11 @@ Resources:
       Description: authKeysSSMUtilFunction npm package
       ContentUri: layers/authKeysSSMUtilFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   invokeSalesforceRestApiFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -112,11 +112,11 @@ Resources:
       Description: invokeSalesforceRestApiFunction npm package
       ContentUri: layers/invokeSfRestApiFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   invokeTelephonyIntegrationApiFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -125,11 +125,11 @@ Resources:
       Description: invokeTelephonyIntegrationApiFunction npm package
       ContentUri: layers/invokeTelephonyIntegrationApiFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   kvsConsumerTriggerFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -138,11 +138,11 @@ Resources:
       Description: kvsConsumerTriggerFunction npm package
       ContentUri: layers/kvsConsumerTriggerFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   PostCallAnalysisTriggerFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -151,18 +151,18 @@ Resources:
       Description: PostCallAnalysisTriggerFunction npm package
       ContentUri: layers/postCallAnalysisTriggerFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   InvokeTelephonyIntegrationApiFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
       CodeUri: invokeTelephonyIntegrationApi/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Environment:
         Variables:
@@ -188,7 +188,7 @@ Resources:
     Properties:
       CodeUri: invokeSfRestApi/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Environment:
         Variables:
@@ -331,7 +331,7 @@ Resources:
     Properties:
       CodeUri: ctrDataSync/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Events:
         Stream:
@@ -374,7 +374,7 @@ Resources:
     Properties:
       CodeUri: handleContactEvents/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       FunctionName: !Sub "${CallCenterApiName}-HandleContactEventsFunction"
       AutoPublishAlias: active
       Policies:
@@ -423,12 +423,12 @@ Resources:
       Handler: kvs_trigger.handler
       AutoPublishAlias: active
       Role: !GetAtt AIPoweredSpeechAnalyticsKvsTriggerRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       MemorySize: 128
       Timeout: 30
       Environment:
         Variables:
-          transcriptionFunction: !GetAtt kvsTranscriber.Arn
+          INVOKE_KVS_TRANSCRIBER_ARN: !GetAtt kvsTranscriber.Arn
           LOG_LEVEL: "info"
       Layers:
         - Ref: kvsConsumerTriggerFunctionLayer
@@ -440,7 +440,7 @@ Resources:
       Handler: handler.handler
       AutoPublishAlias: active
       Role: !GetAtt PostCallAnalysisTriggerFunctionRole.Arn
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       Timeout: 900
       Environment:
         Variables:
@@ -618,18 +618,18 @@ Resources:
       Description: ContactLensProcessorFunctionLayer node modules
       ContentUri: layers/contactLensProcessorFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-      BuildMethod: nodejs14.x
+      BuildMethod: nodejs18.x
 
   ContactLensProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: contactLensProcessor/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Environment:
         Variables:
@@ -670,18 +670,18 @@ Resources:
       Description: ContactLensConsumerFunction node modules
       ContentUri: layers/contactLensConsumerFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-        BuildMethod: nodejs14.x
+        BuildMethod: nodejs18.x
 
   ContactLensConsumerFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: contactLensConsumer/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       MemorySize: 256
       Environment:
@@ -795,7 +795,7 @@ Resources:
       VersionDescription: !Sub "Service Cloud Voice Lambda Version"
       Role: !GetAtt RealtimeAlertRoleResource.Arn
       Timeout: 15
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       FunctionName: !Sub "${CallCenterApiName}-RealtimeAlert"
       Layers:
         - !Ref RealtimeAlertLayer
@@ -812,9 +812,9 @@ Resources:
       Description: Realtime alert Function layer
       ContentUri: layers/realtimeAlertFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
     Metadata:
-      BuildMethod: nodejs14.x
+      BuildMethod: nodejs18.x
 
   RealtimeAlertRoleResource:
     Type: AWS::IAM::Role
@@ -1373,11 +1373,11 @@ Resources:
       Description: VoiceMailAudioProcessingFunctionLayer node modules
       ContentUri: layers/voiceMailAudioProcessingFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-      BuildMethod: nodejs14.x
+      BuildMethod: nodejs18.x
 
   VoiceMailTranscribeFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -1386,11 +1386,11 @@ Resources:
       Description: voiceMailTranscribeFunctionLayer node modules
       ContentUri: layers/voiceMailTranscribeFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-      BuildMethod: nodejs14.x
+      BuildMethod: nodejs18.x
 
   VoiceMailPackagingFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -1399,18 +1399,18 @@ Resources:
       Description: voiceMailPackagingFunctionLayer node modules
       ContentUri: layers/voiceMailPackagingFunctionLayer/nodejs/
       CompatibleRuntimes:
-        - nodejs14.x
+        - nodejs18.x
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-      BuildMethod: nodejs14.x
+      BuildMethod: nodejs18.x
 
   VoiceMailAudioProcessingFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: voiceMailAudioProcessing/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Environment:
         Variables:
@@ -1426,7 +1426,7 @@ Resources:
     Properties:
       CodeUri: voiceMailTranscribe/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Environment:
         Variables:
@@ -1442,7 +1442,7 @@ Resources:
     Properties:
       CodeUri: voiceMailPackaging/
       Handler: handler.handler
-      Runtime: nodejs14.x
+      Runtime: nodejs18.x
       AutoPublishAlias: active
       Environment:
         Variables:
@@ -1517,4 +1517,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 12.0.0
+    SemanticVersion: 13.0.0
