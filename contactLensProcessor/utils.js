@@ -23,12 +23,6 @@ function buildSendMessagePayload(transcript, approximateArrivalTimestamp) {
     payload.participantId = "END_USER";
     payload.senderType = "END_USER";
   }
- SCVLoggingUtil.debug({
-    message: "Send Message payload",
-    eventType: "TRANSCRIPTION",
-    context: payload,
-    category: "contactLensConsumer.utils.buildSendMessagePayload",
-  });
   return payload;
 }
 
@@ -52,20 +46,13 @@ function buildSendRealtimeConversationEventsPayload(categories) {
   payload.service = signalConfig.service;
   payload.events = events;
   payload.persist = false;
-
-  SCVLoggingUtil.debug({
-    message: "Send Realtime Conversation Events payload",
-    eventType: "INTELLIGENCESIGNALS",
-    context: payload,
-    category:
-      "contactLensConsumer.utils.buildSendRealtimeConversationEventsPayload",
-  });
   return payload;
 }
 
 async function getSSMParameterValue(paramName, withDecryption) {
   return new Promise((resolve) => {
-    var useLambdaExtensions = String(config.useSSMLambdaExtension).toLowerCase() === 'true';
+    var useLambdaExtensions =
+      String(config.useSSMLambdaExtension).toLowerCase() === "true";
     if (!useLambdaExtensions) {
       const ssm = new SSM();
       const query = {
@@ -74,15 +61,14 @@ async function getSSMParameterValue(paramName, withDecryption) {
       };
 
       ssm.getParameters(query, (err, data) => {
-       let paramValue = null;
+        let paramValue = null;
 
-       if (!err && data && data.Parameters && data.Parameters.length) {
-         paramValue = data.Parameters[0].Value;
-       }
-      
-       resolve(paramValue);
+        if (!err && data && data.Parameters && data.Parameters.length) {
+          paramValue = data.Parameters[0].Value;
+        }
+        resolve(paramValue);
       });
-    }  else {
+    } else {
       resolve(lambdaExtension.readSSMParameter(paramName));
     }
   });
@@ -102,7 +88,7 @@ async function getSSMParameterValue(paramName, withDecryption) {
 async function generateJWT(params) {
   const { privateKeyParamName, orgId, callCenterApiName, expiresIn } = params;
   const privateKey = await getSSMParameterValue(privateKeyParamName, true);
-  
+
   const signOptions = {
     issuer: orgId,
     subject: callCenterApiName,
@@ -120,25 +106,19 @@ function logEventReceived(eventType, contactId) {
     eventType === "SEGMENTS" ||
     eventType === "COMPLETED"
   ) {
-    SCVLoggingUtil.info({
+    SCVLoggingUtil.debug({
       message: `ContactLensConsumer received ${eventType} event`,
-      eventType: "TRANSCRIPTION",
-      context: {"contact": contactId},
-      category: "contactLensConsumer.utils.logEventReceived",
+      context: { contactId: contactId, payload: eventType },
     });
   } else if (eventType === "FAILED") {
     SCVLoggingUtil.error({
       message: `ContactLensConsumer received ${eventType} event`,
-      eventType: "TRANSCRIPTION",
-      context: {"contact": contactId},
-      category: "contactLensConsumer.utils.logEventReceived",
+      context: { contactId: contactId, payload: eventType },
     });
   } else {
     SCVLoggingUtil.warn({
       message: `ContactLensConsumer received unknown event`,
-      eventType: "TRANSCRIPTION",
-      context: {"contact": contactId},
-      category: "contactLensConsumer.utils.logEventReceived",
+      context: { contactId: contactId, payload: eventType },
     });
   }
 }

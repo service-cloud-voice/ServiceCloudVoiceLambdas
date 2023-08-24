@@ -17,9 +17,8 @@ function buildResponse() {
 
 exports.handler = (event, context, callback) => {
   SCVLoggingUtil.debug({
-    category: "kvs_trigger.handler",
-    message: "Received event",
-    context: event,
+    message: "kvsTrigger event received",
+    context: { payload: event },
   });
 
   let payload = {};
@@ -75,17 +74,16 @@ exports.handler = (event, context, callback) => {
 
   const params = {
     // not passing in a ClientContext
-    FunctionName: process.env.transcriptionFunction,
+    FunctionName: process.env.INVOKE_KVS_TRANSCRIBER_ARN,
     // InvocationType is RequestResponse by default
     // LogType is not set so we won't get the last 4K of logs from the invoked function
     // Qualifier is not set so we use $LATEST
     InvocationType: "Event",
     Payload: JSON.stringify(payload),
   };
-  SCVLoggingUtil.debug({
-    category: "kvs_trigger.handler",
+  SCVLoggingUtil.info({
     message: "Invoke lambda with params",
-    context: params,
+    context: { payload: params },
   });
   lambda.invoke(params, (err) => {
     if (err) {
@@ -93,9 +91,8 @@ exports.handler = (event, context, callback) => {
     } else if (callback) callback(null, buildResponse());
     else
       SCVLoggingUtil.info({
-        category: "kvs_trigger.handler",
-        eventType: "TRANSCRIPTION",
         message: "nothing to callback so letting it go",
+        context: { payload: {} },
       });
   });
 

@@ -9,10 +9,8 @@ class SFSPhoneCallFlow {
       return JSON.stringify(obj) === "{}";
     } catch (ex) {
       SCVLoggingUtil.error({
-        category: "invokeSfRestApi.handler.handler",
-        eventType: "VOICECALL",
         message: `isEmptyObject() exception: ${ex.message}`,
-        context: {},
+        context: { payload: ex },
       });
       return true;
     }
@@ -30,10 +28,8 @@ class SFSPhoneCallFlow {
   static logx(msg) {
     if (!msg) return;
     SCVLoggingUtil.error({
-      category: "invokeSfRestApi.handler.handler",
-      eventType: "VOICECALL",
       message: `\n--- ${msg}`,
-      context: {},
+      context: { payload: msg },
     });
   }
 

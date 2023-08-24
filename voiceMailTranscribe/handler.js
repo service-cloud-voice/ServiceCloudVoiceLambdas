@@ -9,8 +9,7 @@ const TRANSCRIPTS_PREFIX = "voicemail_transcripts/";
 // This Lambda requires an event bridge to s3 recordings bucket
 exports.handler = async (event) => {
   SCVLoggingUtil.debug({
-    category: "voiceMailTranscribe.handler.handler",
-    message: "Received event",
+    message: "voiceMailTranscribe. event received",
     context: event,
   });
   const eventRecord = event.detail;
@@ -29,10 +28,10 @@ exports.handler = async (event) => {
     TagSet.forEach((i) => {
       loadedTags[i.Key] = i.Value;
     });
-  } catch (e) {
+  } catch (err) {
     SCVLoggingUtil.error({
       message: `Failed to extract tags from object`,
-      context: e,
+      context: { paylod: err },
     });
     return;
   }
@@ -46,19 +45,23 @@ exports.handler = async (event) => {
     OutputBucketName: bucketName,
     OutputKey: `${TRANSCRIPTS_PREFIX}${contactId}.json`,
   };
-  SCVLoggingUtil.info({ message: `Start trabscribing job`, context: config });
+  SCVLoggingUtil.info({
+    message: `Start trabscribing job`,
+    context: { contactId: contactId, payload: config },
+  });
   return transcribe
     .startTranscriptionJob(config)
     .promise()
     .then(() => {
       SCVLoggingUtil.info({
         message: `voiceMailTranscribe handler completed successfuly`,
+        context: { contactId: contactId },
       });
     })
     .catch((e) => {
       SCVLoggingUtil.error({
         messge: `voiceMailTranscribe handler failed`,
-        context: e,
+        context: { payload: e },
       });
     });
 };

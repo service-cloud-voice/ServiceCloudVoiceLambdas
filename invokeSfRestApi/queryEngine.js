@@ -16,9 +16,8 @@ function formatQuery(args, queryStr) {
 async function invokeQuery(query, args) {
   const formattedQuery = formatQuery(args, query);
   SCVLoggingUtil.debug({
-    category: "queryEngine.invokeQuery",
-    message: "invoke query from sf rest api",
-    context: formattedQuery,
+    message: "invoke query from SfRestApi",
+    context: { payload: formattedQuery },
   });
   return api.queryRecord(formattedQuery);
 }
