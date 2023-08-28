@@ -27,15 +27,15 @@
     "clean": "find . -name 'node_modules' -type d -prune -exec rm -rf '{}' +; find . -name 'coverage' -type d -prune -exec rm -rf '{}' +; find . -name '*.zip' -type f -prune -exec rm -rf '{}' +;"
   },
   "devDependencies": {
-    "eslint": "^5.16.0",
-    "eslint-config-airbnb-base": "^13.0.0",
-    "eslint-config-prettier": "^2.9.0",
+    "eslint": "8.23.1",
+    "eslint-config-lambdas": "0.3.0",
+    "eslint-config-prettier": "8.5.0",
     "eslint-import-resolver-jest": "3.0.2",
-    "eslint-plugin-import": "^2.13.0",
-    "eslint-plugin-prettier": "^2.6.2",
+    "eslint-plugin-import": "2.26.0",
+    "eslint-plugin-prettier": "4.2.1",
     "jest": "28.1.0",
-    "prettier": "^1.13.7",
-    "rewire": "^4.0.1"
+    "prettier": "2.7.1",
+    "rewire": "6.0.0"
   },
   "jest": {
     "clearMocks": true
@@ -47,12 +47,15 @@
     }
   ],
   "dependencies": {
-    "aws-param-store": "^3.2.0",
-    "aws-sdk": "^2.573.0",
+    "aws-param-store": "3.2.0",
+    "aws-sdk": "2.1354.0",
     "axios": "0.27.2",
-    "flat": "^5.0.2",
-    "jsonwebtoken": "^8.5.1",
+    "axios-logger": "2.5.0",
+    "axios-retry": "3.3.1",
+    "ebml": "3.0.0",
+    "flat": "5.0.2",
+    "jsonwebtoken": "9.0.0",
     "selfsigned": "2.0.1",
-    "uuid": "^3.4.0"
+    "uuid": "3.4.0"
   }
 }

@@ -8,7 +8,7 @@
     "test": "jest --collect-coverage"
   },
   "dependencies": {
-    "aws-sdk": "2.814.0",
+    "aws-sdk": "2.1354.0",
     "winston": "3.2.1",
     "axios": "0.27.2",
     "axios-logger": "2.5.0",

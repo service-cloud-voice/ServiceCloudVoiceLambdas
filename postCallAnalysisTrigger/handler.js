@@ -14,9 +14,8 @@ let overallBatchCount = 0;
 
 exports.handler = async (event) => {
   SCVLoggingUtil.debug({
-    category: "handler.handler",
-    message: "Received event",
-    context: event,
+    message: "postCallAnalysisTrigger event received",
+    context: { payload: event },
   });
   // Get the post-call json file from the event
   try {
@@ -24,9 +23,7 @@ exports.handler = async (event) => {
     const key = decodeURIComponent(event.detail.object.key.replace(/\+/g, " "));
     SCVLoggingUtil.debug({
       message: "Successfully fetched the S3 bucket name and key.",
-      eventType: "SIGNALS",
-      category: [],
-      context: `Bucket Name: ${bucket}, Object Key: ${key}`,
+      context: { payload: `Bucket Name: ${bucket}, Object Key: ${key}` },
     });
 
     if (!utils.validateS3KeyName(key)) {
@@ -42,9 +39,7 @@ exports.handler = async (event) => {
     clObject = JSON.parse(data.Body.toString("ascii"));
     SCVLoggingUtil.debug({
       message: "Successfully loaded the Contact Lens post-call .json file.",
-      eventType: "SIGNALS",
-      category: "Contact Lens analysis file content",
-      context: clObject,
+      context: { payload: clObject },
     });
 
     contactId = clObject.CustomerMetadata.ContactId;
@@ -54,9 +49,7 @@ exports.handler = async (event) => {
     SCVLoggingUtil.error({
       message:
         "Error loading Contact Lens post-call S3 bucket and file content!",
-      eventType: "SIGNALS",
-      category: message,
-      context: err,
+      context: { paylod: err },
     });
     throw new Error(message);
   }
@@ -123,8 +116,8 @@ exports.handler = async (event) => {
   // sanity check
   if (requestSignals.length === 0) {
     SCVLoggingUtil.info({
-      category: "handler.handler",
       message: `No signals are identified in the Contact Lens post call analysis file, stop and return here.`,
+      context: { payload: requestSignals },
     });
     return null;
   }
@@ -133,10 +126,8 @@ exports.handler = async (event) => {
   const signalRequestBatches = utils.sliceIntoChunks(requestSignals, 25);
   overallBatchCount = signalRequestBatches.length;
   SCVLoggingUtil.info({
-    category: "handler.handler",
     message: `Preparing to send ${overallBatchCount} batches to Salesforce Service Cloud Voice.`,
-    eventType: [],
-    context: [],
+    context: {},
   });
 
   // start with the 1st batch
@@ -147,10 +138,8 @@ exports.handler = async (event) => {
     requestPayload.events = signalRequestBatch;
 
     SCVLoggingUtil.info({
-      category: "handler.handler",
       message: `Invoked the persistSignals API with contactId ${contactId}. Processing batch ${batchCount} of ${overallBatchCount}.`,
-      eventType: [],
-      context: [],
+      context: { contactId: contactId },
     });
     await api.persistSignals(contactId, requestPayload);
   }

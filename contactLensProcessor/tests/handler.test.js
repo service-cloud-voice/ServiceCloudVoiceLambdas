@@ -5,10 +5,10 @@ const utils = require('../utils.js');
 jest.mock('../telephonyIntegrationApi');
 const api = require('../telephonyIntegrationApi');
 
-const mockVoiceIntelligencePilotEnabledValueGetter = jest.fn();
+const mockVoiceIntelligenceEnabledValueGetter = jest.fn();
 jest.mock('../signalConfig', () => ({
-  get voiceIntelligencePilotEnabled() {
-    return mockVoiceIntelligencePilotEnabledValueGetter();
+  get voiceIntelligenceEnabled() {
+    return mockVoiceIntelligenceEnabledValueGetter();
   },
 }));
 const config = require('../config');
@@ -23,7 +23,7 @@ describe('Lambda handler', () => {
     const event = { Records: [{ kinesis: { data: new Buffer.from(record).toString('base64') } }] };
     const expectedResponse = { result: 'Success' };
 
-    api.sendMessage.mockImplementationOnce(() => Promise.resolve(expectedResponse));
+    api.sendMessagesInBulk.mockImplementationOnce(() => Promise.resolve(expectedResponse));
 
     await expect(await handler.handler(event)).toMatchObject([expectedResponse]);
   });
@@ -58,11 +58,11 @@ describe('Lambda handler', () => {
   it('successfully handle Contact Lens event for Categories', async () => {
     const record = '{"Version":"1.0.0","Channel":"VOICE","AccountId":"698414421362","InstanceId":"4defbdc5-3029-456e-9bf3-a0d168cf409c","ContactId":"d5187cb8-f83f-471d-b724-bfb242b34b59","LanguageCode":"en-US","EventType":"SEGMENTS","Segments":[{"Categories":{"MatchedCategories":["keyWord"],"MatchedDetails": {"keyWord": {"PointsOfInterest": [{"BeginOffsetMillis": 5120,"EndOffsetMillis": 15495}]}}}}]}';
     const event = { Records: [{ kinesis: { data: new Buffer.from(record).toString('base64') } }] };
-    const expectedResponse = { result: 'Success' };
-    mockVoiceIntelligencePilotEnabledValueGetter.mockReturnValue(true);
+    const expectedResponse = [];
+    mockVoiceIntelligenceEnabledValueGetter.mockReturnValue(true);
 
-    api.sendRealtimeConversationEvents.mockImplementationOnce(() => Promise.resolve(expectedResponse));
+    api.sendRealtimeConversationEvents.mockImplementationOnce(() => Promise.resolve());
 
-    await expect(await handler.handler(event)).toMatchObject([expectedResponse]);
+    await expect(await handler.handler(event)).toMatchObject(expectedResponse);
   });
 })

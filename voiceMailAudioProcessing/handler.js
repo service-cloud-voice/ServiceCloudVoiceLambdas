@@ -69,9 +69,8 @@ const done = () =>
 
 exports.handler = async (event) => {
   SCVLoggingUtil.debug({
-    category: "voiceMailAudioProcessing.handler.handler",
-    message: "Received event",
-    context: event,
+    message: "VoiceMailAudioProcessing event received",
+    context: { payload: event },
   });
   // Establish a response container
   const responseContainer = {};
@@ -96,16 +95,15 @@ exports.handler = async (event) => {
       // Decode the payload
       const payload = Buffer.from(record.kinesis.data, "base64").toString();
       SCVLoggingUtil.debug({
-        category: "voiceMailAudioProcessing.handler.handler",
         message: "Decoded payload",
-        context: payload,
+        context: { payload: payload },
       });
       vmrecord = JSON.parse(payload);
       currentContactID = vmrecord.ContactId;
     } catch (e) {
       SCVLoggingUtil.error({
         message: "FAIL: Record extraction failed",
-        context: e,
+        context: { payload: e },
       });
       responseContainer[`record${totalRecordCount}result`] =
         "Failed to extract record and/or decode";
@@ -130,6 +128,7 @@ exports.handler = async (event) => {
       ) {
         SCVLoggingUtil.info({
           message: `Processing a Voicemail chunk for record #${totalRecordCount} with contactId ${currentContactID}`,
+          context: { contactId: currentContactID },
         });
       } else {
         responseContainer[
@@ -138,10 +137,10 @@ exports.handler = async (event) => {
         processedRecordCount += 1;
         return;
       }
-    } catch (e) {
+    } catch (err) {
       SCVLoggingUtil.error({
         message: "Some other bad thing happened with the attribute comparison",
-        context: e,
+        context: { payload: err },
       });
       responseContainer[
         `record${totalRecordCount}result`
@@ -163,10 +162,10 @@ exports.handler = async (event) => {
         streamARN.indexOf("/") + 1,
         streamARN.lastIndexOf("/")
       );
-    } catch (e) {
+    } catch (err) {
       SCVLoggingUtil.error({
         message: "FAIL: Counld not identify KVS info",
-        context: e,
+        context: { payload: err },
       });
       responseContainer[`record${totalRecordCount}result`] =
         "Failed to extract KVS info";
@@ -175,16 +174,18 @@ exports.handler = async (event) => {
 
     // Iterate through the attributes to get the tags
     try {
-      attrTagContainer += `vm_dialedNumber=${encodeURIComponent(
+      attrTagContainer += `vm_lang=${encodeURIComponent(
+        vmrecord.Attributes.vm_lang
+      )}&vm_dialedNumber=${encodeURIComponent(
         vmrecord.SystemEndpoint.Address
       )}&vm_initTimestamp=${encodeURIComponent(
         vmrecord.InitiationTimestamp
       )}&vm_endTimestamp=${encodeURIComponent(vmrecord.DisconnectTimestamp)}&`;
       attrTagContainer = attrTagContainer.replace(/&\s*$/, "");
-    } catch (e) {
+    } catch (err) {
       SCVLoggingUtil.error({
         message: "FAIL: Counld not extract vm tags",
-        context: e,
+        context: { payload: err },
       });
       responseContainer[`record${totalRecordCount}result`] =
         "Failed to extract vm tags";
@@ -235,6 +236,7 @@ exports.handler = async (event) => {
                 if (currentFragment > stopFragmentNum) {
                   SCVLoggingUtil.info({
                     message: `KVS processing completed for chunk [currentFragment: ${currentFragment}, stopFragmentNum: ${stopFragmentNum}].`,
+                    context: { contactId: currentContactID },
                   });
                   shouldProcessKvs = false;
                 }
@@ -298,6 +300,7 @@ exports.handler = async (event) => {
         processedRecordCount += 1;
         SCVLoggingUtil.info({
           message: `Write complete for chunk (contact ID ${currentContactID})`,
+          context: { contactId: currentContactID },
         });
         responseContainer[
           `record${totalRecordCount}result`
@@ -319,10 +322,10 @@ exports.handler = async (event) => {
 
       // waiting until the recorded stream
       await done();
-    } catch (e) {
+    } catch (err) {
       SCVLoggingUtil.error({
         message: "FAIL: Counld write audio to S3",
-        context: e,
+        context: { payload: err },
       });
       responseContainer[
         `record${totalRecordCount}result`

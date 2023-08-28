@@ -17,20 +17,13 @@ const logger = winston.createLogger({
 
 const noContext = "NO_CONTEXT";
 const noMessage = "NO_MESSAGE";
-const noCategory = "NO_CATEGORY";
-const noEventType = "NO_EVENT_TYPE";
 
 /**
  * Create a log line with level of INFO
  * @param logLine Object containing message, context, evenType and context to log
  */
 function info(logLine) {
-  const logline = {
-    context: logLine.context || noContext,
-    message: logLine.message || noMessage,
-    category: logLine.category || noCategory,
-    eventType: logLine.eventType || noEventType,
-  };
+  const logline = buildLog(logLine);
   logger.info(logline);
 }
 
@@ -39,12 +32,7 @@ function info(logLine) {
  * @param logLine Object containing message, context, evenType and context to log
  */
 function debug(logLine) {
-  const logline = {
-    context: logLine.context || noContext,
-    message: logLine.message || noMessage,
-    category: logLine.category || noCategory,
-    eventType: logLine.eventType || noEventType,
-  };
+  const logline = buildLog(logLine);
   logger.debug(logline);
 }
 
@@ -53,12 +41,7 @@ function debug(logLine) {
  * @param logLine Object containing message, context, evenType and context to log
  */
 function warn(logLine) {
-  const logline = {
-    context: logLine.context || noContext,
-    message: logLine.message || noMessage,
-    category: logLine.category || noCategory,
-    eventType: logLine.eventType || noEventType,
-  };
+  const logline = buildLog(logLine);
   logger.warn(logline);
 }
 
@@ -67,13 +50,21 @@ function warn(logLine) {
  * @param logLine Object containing message, context, evenType and context to log
  */
 function error(logLine) {
-  const logline = {
+  const logline = buildLog(logLine);
+  logger.error(logline);
+}
+
+/**
+ * Create a log line with level of ERROR
+ * @param logLine Object containing message, context, evenType and context to log
+ */
+function buildLog(logLine) {
+  const log = {
     context: logLine.context || noContext,
     message: logLine.message || noMessage,
-    category: logLine.category || noCategory,
-    eventType: logLine.eventType || noEventType,
+    category: "ContactLensProcessor",
   };
-  logger.error(logline);
+  return log;
 }
 
 module.exports = {

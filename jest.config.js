@@ -7,16 +7,16 @@ module.exports = {
 			branches: 90,
 			functions: 90,
 			lines: 90,
-			statements: 90
-		}
+			statements: 90,
+		},
 	},
 	coverageReporters: ['json', 'clover'],
 	moduleFileExtensions: ['js'],
 	transform: {
-		'^.+\\.js$': 'babel-jest'
+		'^.+\\.js$': 'babel-jest',
 	},
 	verbose: true,
 	silent: true,
 	testURL: 'http://localhost/',
-	json: true
+	json: true,
 };

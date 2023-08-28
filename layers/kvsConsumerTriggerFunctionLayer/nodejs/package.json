@@ -4,7 +4,7 @@
   "description": "The package dependencies required by the kvsConsumerTrigger Lambda function.",
   "main": "",
   "dependencies": {
-    "aws-sdk": "2.814.0",
+    "aws-sdk": "2.1354.0",
     "winston": "3.2.1"
   }
 }

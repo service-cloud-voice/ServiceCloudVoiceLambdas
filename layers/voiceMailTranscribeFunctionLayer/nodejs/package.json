@@ -4,7 +4,7 @@
   "description": "The package dependencies required by the voiceMailTranscribeFunctionLayer Lambda function.",
   "main": "",
   "dependencies": {
-    "aws-sdk": "2.814.0",
+    "aws-sdk": "2.1354.0",
     "winston": "3.2.1",
     "ebml": "3.0.0",
     "base64-js": "1.5.1",
