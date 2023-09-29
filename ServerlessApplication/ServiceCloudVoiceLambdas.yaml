@@ -54,12 +54,18 @@ Parameters:
     Type: String
     Default: service-cloud-voice-contact-center-id
     Description: Connect Instance Id.
+  SalesforceAuthEndpoint:
+    Type: String
+    Default: https://login.salesforce.com/services/oauth2/token
+    Description: The authentication endpoint for Salesforce organisation and environment.
+  SalesforceRestApiEndpointBase:
+    Type: String
+    Default: https://login.salesforce.com/services/data/v54.0
+    Description: The endpoint for the organisational Salesforce REST API.
   PermissionBoundaryARN:
     Default: ''
     Type: String
     Description: IAM Permission Boundary ARN as defined by the admin
-
-
 
 Conditions:
   CreatePermissionBoundary:
@@ -197,8 +203,8 @@ Resources:
           ACCESS_TOKEN_PARAM_NAME: !Sub ${SalesforceRestApiAccessTokenSSMParamName}
           SUBJECT: !Sub ${SalesforceRestApiSubjectSSMParamName}
           AUDIENCE: !Sub ${SalesforceRestApiAudienceSSMParamName}
-          SALESFORCE_AUTH_ENDPOINT: https://login.salesforce.com/services/oauth2/token
-          SALESFORCE_REST_API_ENDPOINT_BASE: https://login.salesforce.com/services/data/v54.0
+          SALESFORCE_AUTH_ENDPOINT: !Sub ${SalesforceAuthEndpoint}
+          SALESFORCE_REST_API_ENDPOINT_BASE: !Sub ${SalesforceRestApiEndpointBase}
           LOG_LEVEL: "info"
       Policies:
         - Statement:
