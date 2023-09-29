@@ -3,13 +3,13 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   aws-integration/lambdas
   SAM Template for aws-integration/lambdas
-  
+
 # More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
     Timeout: 5
 
-Parameters: 
+Parameters:
   SalesforceOrgId:
     Type: String
     AllowedPattern: "^00D[a-zA-Z0-9]{12}$"
@@ -62,7 +62,7 @@ Parameters:
 
 
 Conditions:
-  CreatePermissionBoundary: 
+  CreatePermissionBoundary:
    !Not [!Equals [!Ref PermissionBoundaryARN, '']]
 
 Resources:
@@ -261,7 +261,7 @@ Resources:
                 import boto3
                 import os
                 import cfnresponse
-                
+
                 def verifyRealtimeContactAnalysisSegmentsExist(client, connectInstanceId):
                   try:
                     response = client.list_instance_storage_configs(
@@ -272,7 +272,7 @@ Resources:
                       return (True, response['StorageConfigs'][0]['AssociationId'])
                   except Exception as e:
                     return(False, "Cannot Find REAL_TIME_CONTACT_ANALYSIS_SEGMENTS association: " + str(e))
-              
+
                 def addRealtimeContactAnalysisSegments(client, connectInstanceId, streamArnVal):
                   try:
                     response = client.associate_instance_storage_config(
@@ -288,7 +288,7 @@ Resources:
                     return(True, response['ResponseMetadata']['RequestId'])
                   except Exception as e:
                     return (False, "Cannot Associate REAL_TIME_CONTACT_ANALYSIS_SEGMENTS: " + str(e))
-              
+
                 def lambda_handler(event, context):
                   client = boto3.client('connect')
                   streamArnVal = event['ResourceProperties']['Create']['StreamArn']
@@ -312,7 +312,7 @@ Resources:
                   responseData = {}
                   responseData['Reason'] = reason
                   cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData)
-                  
+
   InvokeContactLensKinesisStreamAssociateFunction:
     DependsOn: ContactLensKinesisStreamAssociateFunction
     Type: Custom::InvokeContactLensKinesisStreamAssociateFunction
@@ -325,7 +325,7 @@ Resources:
         - ContactLensKinesisStreamAssociateFunction
         - Arn
       Description: Invoke ContactLensKinesisStreamAssociateFunction
-      
+
   CTRDataSyncFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -401,7 +401,7 @@ Resources:
       Handler: com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService::handleRequest
       AutoPublishAlias: active
       Role: !GetAtt AIPoweredSpeechAnalyticsKvsTranscribeRole.Arn
-      Runtime: java8.al2
+      Runtime: java17
       MemorySize: 512
       Timeout: 900
       Environment:
@@ -517,7 +517,7 @@ Resources:
                   - "kinesisvideo:Describe*"
                   - "kinesisvideo:Get*"
                   - "kinesisvideo:List*"
-                Resource: 
+                Resource:
                   - "*"
               - Effect: Allow
                 Action:
@@ -530,7 +530,7 @@ Resources:
                 Action:
                   - 'connect:UpdateContactAttributes'
                 Resource:
-                  - '*'    
+                  - '*'
 
   AIPoweredSpeechAnalyticsKvsTriggerRole:
     Type: "AWS::IAM::Role"
@@ -1448,8 +1448,9 @@ Resources:
         Variables:
           invoke_telephony_integration_api_arn: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
           LOG_LEVEL: "info"
+          delay_before_routing_vm_sec: 60
       Role: !GetAtt VoiceMailPackagingFunctionRole.Arn
-      Timeout: 60
+      Timeout: 400
       Layers:
         - Ref: VoiceMailPackagingFunctionLayer
 
@@ -1517,4 +1518,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 13.0.0
+    SemanticVersion: 13.1.0
