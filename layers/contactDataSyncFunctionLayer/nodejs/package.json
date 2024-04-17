@@ -1,7 +1,7 @@
 {
-  "name": "contactLensProcessorFunctionLayer",
+  "name": "contactDataSyncFunctionLayer",
   "version": "1.0.0",
-  "description": "The package dependencies required by the contactLensProcessor Lambda function.",
+  "description": "The package dependencies required by the contactDataSync Lambda function.",
   "main": "",
   "dependencies": {
     "aws-sdk": "2.1354.0",

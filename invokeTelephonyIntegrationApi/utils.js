@@ -41,7 +41,6 @@ async function generateJWT(params) {
     subject: callCenterApiName,
     expiresIn,
     algorithm: "RS256",
-    allowInsecureKeySizes: true,
     jwtid: uuid(),
   };
 
