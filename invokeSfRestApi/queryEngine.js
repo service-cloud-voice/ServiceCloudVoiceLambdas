@@ -2,10 +2,10 @@ const api = require("./sfRestApi");
 const SCVLoggingUtil = require("./SCVLoggingUtil");
 
 function formatQuery(args, queryStr) {
-  let query = queryStr;
+  let query;
   Object.keys(args).forEach((key) => {
     const replacement = `{${key}}`;
-    query = query.replace(replacement, args[key]);
+    query = queryStr.replace(replacement, args[key]);
   });
   return query;
 }

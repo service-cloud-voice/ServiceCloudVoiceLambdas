@@ -54,6 +54,14 @@ Parameters:
     Type: String
     Default: service-cloud-voice-contact-center-id
     Description: Connect Instance Id.
+  SalesforceAuthEndpoint:
+    Type: String
+    Default: https://login.salesforce.com/services/oauth2/token
+    Description: The authentication endpoint for Salesforce organisation and environment.
+  SalesforceRestApiEndpointBase:
+    Type: String
+    Default: https://login.salesforce.com/services/data/v54.0
+    Description: The endpoint for the organisational Salesforce REST API.
   PermissionBoundaryARN:
     Default: ''
     Type: String
@@ -197,8 +205,8 @@ Resources:
           ACCESS_TOKEN_PARAM_NAME: !Sub ${SalesforceRestApiAccessTokenSSMParamName}
           SUBJECT: !Sub ${SalesforceRestApiSubjectSSMParamName}
           AUDIENCE: !Sub ${SalesforceRestApiAudienceSSMParamName}
-          SALESFORCE_AUTH_ENDPOINT: https://login.salesforce.com/services/oauth2/token
-          SALESFORCE_REST_API_ENDPOINT_BASE: https://login.salesforce.com/services/data/v54.0
+          SALESFORCE_AUTH_ENDPOINT: !Sub ${SalesforceAuthEndpoint}
+          SALESFORCE_REST_API_ENDPOINT_BASE: !Sub ${SalesforceRestApiEndpointBase}
           LOG_LEVEL: "info"
       Policies:
         - Statement:
@@ -1171,6 +1179,7 @@ Resources:
           Value: !Ref ContactLensConsumerFunction
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: "notBreaching"
+
   ContactLensConsumerFunctionNameThrottlesAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -1192,10 +1201,132 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: "notBreaching"
 
+  VoiceMailAudioProcessingFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${VoiceMailAudioProcessingFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${VoiceMailAudioProcessingFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailAudioProcessingFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailAudioProcessingFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${VoiceMailAudioProcessingFunction}  Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${VoiceMailAudioProcessingFunction}  that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailAudioProcessingFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailTranscribeFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${VoiceMailTranscribeFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${VoiceMailTranscribeFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailTranscribeFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailTranscribeFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${VoiceMailTranscribeFunction}  Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${VoiceMailTranscribeFunction}  that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailTranscribeFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  VoiceMailPackagingFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${VoiceMailPackagingFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${VoiceMailPackagingFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailPackagingFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailPackagingFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${VoiceMailPackagingFunction}  Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${VoiceMailPackagingFunction}  that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailPackagingFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
   ServiceCloudVoiceLambdaDashboard:
     Type: "AWS::CloudWatch::Dashboard"
     Properties:
-      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunction}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunction}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunction}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriber}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriber}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTrigger}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTrigger}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunction}"}}, {"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunction}"}}]}'
+      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunction}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunction}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunction}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriber}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriber}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTrigger}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTrigger}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunction}"}}, {"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunction}"}},{"type": "metric","x": 6,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailAudioProcessingFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailAudioProcessingFunction}"}},{"type": "metric","x": 12,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailTranscribeFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailTranscribeFunction}"}},{"type": "metric","x": 0,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailPackagingFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailPackagingFunction}"}}]}'
       DashboardName: !Sub '${CallCenterApiName}-ServiceCloudVoiceLambdaDashboard'
   ServiceCloudVoiceConnectDashboard:
     Type: "AWS::CloudWatch::Dashboard"
@@ -1518,4 +1649,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 13.2.0
+    SemanticVersion: 14.0.0
