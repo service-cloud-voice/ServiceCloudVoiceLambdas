@@ -5,6 +5,20 @@
   "main": "",
   "dependencies": {
     "aws-sdk": "2.1354.0",
-    "winston": "3.2.1"
+    "winston": "3.2.1",
+    "ebml": "3.0.0",
+    "base64-js": "1.5.1",
+    "buffer": "4.9.2",
+    "events": "1.1.1",
+    "ieee754": "1.1.13",
+    "isarray": "1.0.0",
+    "jmespath":  "0.16.0",
+    "punycode": "1.3.2",
+    "querystring": "0.2.0",
+    "sax": "1.2.1",
+    "url": "0.10.3",
+    "uuid": "8.0.0",
+    "xml2js":  "0.4.19",
+    "xmlbuilder": "9.0.7"
   }
 }

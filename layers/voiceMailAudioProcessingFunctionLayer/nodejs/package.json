@@ -6,7 +6,6 @@
   "dependencies": {
     "aws-sdk": "2.1354.0",
     "winston": "3.2.1",
-    "wav": "1.0.2",
     "ebml": "3.0.0"
   }
 }
