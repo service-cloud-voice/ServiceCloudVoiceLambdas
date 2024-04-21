@@ -49,7 +49,7 @@
   "dependencies": {
     "aws-param-store": "3.2.0",
     "aws-sdk": "2.1354.0",
-    "axios": "0.27.2",
+    "axios": "0.28.0",
     "axios-logger": "2.5.0",
     "axios-retry": "3.3.1",
     "ebml": "3.0.0",
