@@ -4,15 +4,12 @@ This repo contains the AWS artifacts required for integrating with the Salesforc
 ## Build, Deploy, and Publish AWS Lambda Functions
 **Prerequisite** - Install gradle:
 ```
-HOMEBREW_NO_AUTO_UPDATE=1 brew install homebrew/cask-versions/zulu8
-/usr/libexec/java_home -v 1.8
-brew install zulu8
 brew install gradle
 ```
 **Step 1** - Build the serverless application:
 ```
 cd ..
-sam build --base-dir . --template-file ServerlessApplication/ServiceCloudVoiceLambdas.yaml
+sam build
 ```
 **Step 2** - Package the serverless application:
 ```
