@@ -88,7 +88,6 @@ describe('generateJWT', () => {
             subject:  'test_call_center_api_name',
             expiresIn:  'test_expires_in',
             algorithm:  'RS256',
-            allowInsecureKeySizes: true,
             jwtid: '123456789'
         });
     });
@@ -122,7 +121,6 @@ describe('generateJWT', () => {
             privateKeyParamName: 'test_param_name',
             orgId: 'test_org_id',
             callCenterApiName: 'test_call_center_api_name',
-            allowInsecureKeySizes: true,
             expiresIn: 'test_expires_in'
         });
 

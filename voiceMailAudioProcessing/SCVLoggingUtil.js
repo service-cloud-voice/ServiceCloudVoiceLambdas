@@ -69,7 +69,7 @@ function buildLog(logLine) {
   const log = {
     context: logLine.context || noContext,
     message: logLine.message || noMessage,
-    category: "ContactLensProcessor",
+    category: "VoiceMailAudioProcessing",
   };
   return log;
 }

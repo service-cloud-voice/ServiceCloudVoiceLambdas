@@ -28,6 +28,13 @@ function updateVoiceCallRecord(voiceCall) {
 }
 
 function shouldProcessCtr(ctrRecord) {
+  if (ctrRecord?.Attributes?.NoSync === 'true') {
+    SCVLoggingUtil.info({
+      message: "NoSync attribute set to True, so skipping voice call update",
+      context: ctrRecord.Attributes,
+    });
+    return false;
+  }
   return (
     ["INBOUND", "OUTBOUND", "TRANSFER", "CALLBACK", "API"].includes(
       ctrRecord.InitiationMethod

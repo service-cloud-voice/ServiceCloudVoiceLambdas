@@ -19,7 +19,12 @@ function generatePrivatePublicKeyPair(requestDetails) {
   ];
   const expiresIn = requestDetails.ExpiresIn;
 
-  const pems = selfsigned.generate(attrs, { days: expiresIn });
+  var pems = selfsigned.generate(attrs, {
+    keySize: 2048, // the size for the private key in bits (default: 1024)
+    days: expiresIn, // how long till expiry of the signed certificate (default: 365)
+    algorithm: "RS256",
+    extensions: [{ name: "basicConstraints", cA: true }], // certificate extensions array
+  });
   return pems;
 }
 

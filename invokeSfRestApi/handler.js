@@ -55,6 +55,18 @@ exports.handler = async (event) => {
       result = dispatchSearch(sosl);
       break;
     }
+    case "uploadTranscript": {
+      result = await api.uploadTranscript(
+        event.Details.Parameters.contactIdsPayloadMap
+      );
+      break;
+    }
+    case "fetchUploadIdsStatus": {
+      result = await api.fetchUploadIdsStatus(
+        event.Details.Parameters.uploadIds
+      );
+      break;
+    }
     case "realtimeAlertEvent": {
       result = await api.sendRealtimeAlertEvent(
         utils.getRealtimeAlertEventFieldValuesFromConnectLambdaParams(

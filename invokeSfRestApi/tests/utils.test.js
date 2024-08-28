@@ -25,7 +25,6 @@ describe('generateJWT', () => {
         expect(jwt.sign).toHaveBeenCalledWith('test_payload', 'test_privateKey', {
             algorithm: 'RS256',
             expiresIn: 'test_expiresIn',
-            allowInsecureKeySizes: true,
             jwtid: '123456789'
         });
     });

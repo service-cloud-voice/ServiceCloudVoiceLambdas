@@ -135,7 +135,7 @@ exports.handler = async (event) => {
           `record${totalRecordCount}result`
         ] = ` ContactID: ${currentContactID} - IGNORE - voicemail flag not valid`;
         processedRecordCount += 1;
-        return;
+        continue; // eslint-disable-line
       }
     } catch (err) {
       SCVLoggingUtil.error({
