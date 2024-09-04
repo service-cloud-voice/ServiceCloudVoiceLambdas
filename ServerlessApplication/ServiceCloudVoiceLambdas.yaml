@@ -87,6 +87,19 @@ Resources:
     Metadata:
         BuildMethod: nodejs18.x
 
+  contactDataSyncFunctionLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: contactDataSyncFunctionLayer
+      Description: contactDataSyncFunction npm package
+      ContentUri: layers/contactDataSyncFunctionLayer/nodejs/
+      CompatibleRuntimes:
+        - nodejs18.x
+      LicenseInfo: ../LICENSE.md
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: nodejs18.x
+
   handleContactEventsFunctionLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
@@ -164,6 +177,37 @@ Resources:
       RetentionPolicy: Retain
     Metadata:
         BuildMethod: nodejs18.x
+
+  ContactDataSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: contactDataSync/
+      Handler: handler.handler
+      Runtime: nodejs18.x
+      Role: !GetAtt ContactDataSyncFunctionRole.Arn
+      FunctionName: !Sub "${CallCenterApiName}-ContactDataSyncFunction"
+      AutoPublishAlias: active
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - 'logs:CreateLogGroup'
+                - 'logs:CreateLogStream'
+                - 'logs:PutLogEvents'
+                - 'lambda:InvokeFunction'
+              Resource:
+                - '*'
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          CONNECT_INSTANCE_ID: !Sub "${ConnectInstanceId}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          MAX_CONTACT_IDS: 100
+          INVOKE_SALESFORCE_REST_API_ARN: !Ref InvokeSalesforceRestApiFunction.Alias
+          BATCH_SIZE: 10
+      Layers:
+        - Ref: contactDataSyncFunctionLayer
 
   InvokeTelephonyIntegrationApiFunction:
     Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -539,6 +583,34 @@ Resources:
                   - 'connect:UpdateContactAttributes'
                 Resource:
                   - '*'
+
+  ContactDataSyncFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [ CreatePermissionBoundary, !Ref PermissionBoundaryARN, !Ref "AWS::NoValue" ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ContactDataSyncFunctionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - "connect:DescribeContact"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                Resource:
+                  - "*"
+                Effect: Allow
 
   AIPoweredSpeechAnalyticsKvsTriggerRole:
     Type: "AWS::IAM::Role"
@@ -958,6 +1030,46 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: "notBreaching"
 
+  ContactDataSyncFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${ContactDataSyncFunction} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${ContactDataSyncFunction} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactDataSyncFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  ContactDataSyncFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${ContactDataSyncFunction}Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${ContactDataSyncFunction} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactDataSyncFunction
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
   InvokeTelephonyIntegrationApiFunctionErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -1326,7 +1438,7 @@ Resources:
   ServiceCloudVoiceLambdaDashboard:
     Type: "AWS::CloudWatch::Dashboard"
     Properties:
-      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunction}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunction}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunction}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriber}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriber}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTrigger}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTrigger}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunction}"}}, {"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunction}"}},{"type": "metric","x": 6,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailAudioProcessingFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailAudioProcessingFunction}"}},{"type": "metric","x": 12,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailTranscribeFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailTranscribeFunction}"}},{"type": "metric","x": 0,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailPackagingFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailPackagingFunction}"}}]}'
+      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunction}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunction}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunction}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriber}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriber}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTrigger}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTrigger}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunction}"}}, {"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunction}"}},{"type": "metric","x": 6,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailAudioProcessingFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailAudioProcessingFunction}"}},{"type": "metric","x": 12,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailTranscribeFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailTranscribeFunction}"}},{"type": "metric","x": 0,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailPackagingFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailPackagingFunction}"}},{"type": "metric","x": 6,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactDataSyncFunction}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactDataSyncFunction}"}}]}'
       DashboardName: !Sub '${CallCenterApiName}-ServiceCloudVoiceLambdaDashboard'
   ServiceCloudVoiceConnectDashboard:
     Type: "AWS::CloudWatch::Dashboard"
@@ -1637,6 +1749,9 @@ Outputs:
   ContactLensProcessorFunction:
     Description: ContactLensProcessorFunction Lambda Function ARN
     Value: !GetAtt ContactLensProcessorFunction.Arn
+  ContactDataSyncFunction:
+    Description: "ContactDataSync Lambda Function ARN"
+    Value: !GetAtt ContactDataSyncFunction.Arn
 
 
 Metadata:
@@ -1649,4 +1764,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 14.2.0
+    SemanticVersion: 15.0.0

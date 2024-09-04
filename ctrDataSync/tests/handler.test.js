@@ -1,4 +1,12 @@
 const handler = require('../handler');
+
+jest.mock('../SCVLoggingUtil');
+const SCVLoggingUtil = require('../SCVLoggingUtil');
+
+afterEach(() => {
+	jest.restoreAllMocks();
+});
+
 describe('shouldProcessCTRTests', () => {
 	let inboundCall = {
 		InitiationMethod: "INBOUND",
@@ -91,5 +99,39 @@ describe('shouldProcessCTRTests', () => {
 	}
 	it('should process misformatted voicemails - test 2', () => {
 		expect(handler.shouldProcessCtr(misformattedVoicemailCall2)).toBeTruthy();
+	});
+
+	let noSyncVoiceCall1 = {
+		InitiationMethod: "INBOUND",
+		ContactId: "placeHolderContactId",
+		Attributes: {
+			NoSync: 'true'
+		}
+	}
+	it('should not process when NoSync attribute set to true - test 1', () => {
+		expect(handler.shouldProcessCtr(noSyncVoiceCall1)).toBeFalsy();
+	});
+
+	let noSyncVoiceCall2 = {
+		InitiationMethod: "INBOUND",
+		ContactId: "placeHolderContactId",
+		Attributes: {
+			NoSync: 'false'
+		}
+	}
+	it('should process when NoSync attribute set to false - test 2', () => {
+		expect(handler.shouldProcessCtr(noSyncVoiceCall2)).toBeTruthy();
+	});
+});
+
+describe('Lambda handler', () => {
+	it('should error for non supported CTR events', async () => {
+		const record = '{"InitiationMethod":"placeHolderInitiationMethod"}';
+		const event = {Records: [{kinesis: {data: new Buffer.from(record).toString('base64')}}]};
+		await handler.handler(event);
+		expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+			message: "Encountered Non supported CTR Events: failing fast",
+			context: {},
+		});
 	});
 });

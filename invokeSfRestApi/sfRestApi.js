@@ -1,6 +1,8 @@
 const utils = require("./utils");
 const axiosWrapper = require("./axiosWrapper");
 const SCVLoggingUtil = require("./SCVLoggingUtil");
+const { Readable } = require("stream");
+const FormData = require("form-data");
 
 function buildError(e) {
   const status = e.response ? e.response.status : 500;
@@ -120,6 +122,68 @@ async function sendRealtimeAlertEvent(fieldValues) {
   }
 }
 
+async function uploadTranscript(contactIdsPayloadMap) {
+  try {
+    const formData = new FormData();
+    const headers = Object.assign(
+      {
+        Accept: "application/json",
+      },
+      formData.getHeaders()
+    );
+    //filename required for multipart upload
+    //https://developer.salesforce.com/docs/atlas.en-us.248.0.voice_developer_guide.meta/voice_developer_guide/voice_connect_overview.htm
+    var readable = [];
+    const cIdMap = new Map(JSON.parse(contactIdsPayloadMap));
+    let i = 0;
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.uploadTranscript",
+      message: `Send uploadTranscript for contactIdsPayloadMap  size ${cIdMap.size}`,
+    });
+    for (const entry of cIdMap.entries()) {
+      readable[i] = Readable.from(entry[1]);
+      formData.append(entry[0], readable[i], { filename: "transcripts.txt" });
+      i++;
+    }
+    const response = await sendRequest(
+      "post",
+      "connect/conversations/upload",
+      formData,
+      headers
+    );
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.uploadTranscript",
+      message: "Response from  connect/conversations/upload ",
+      context: JSON.stringify(response.data),
+    });
+    return response.data;
+  } catch (e) {
+    return buildError(e);
+  }
+}
+
+async function fetchUploadIdsStatus(uploadIds) {
+  SCVLoggingUtil.debug({
+    category: "sfRestApi.fetchUploadIdsStatus",
+    message: "Send fetchUploadIdsStatus",
+    context: uploadIds,
+  });
+  try {
+    const response = await sendRequest(
+      "get",
+      `connect/conversations/upload?uploadIds=${encodeURIComponent(uploadIds)}`
+    );
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.uploadTranscript",
+      message: "Response from connect/conversations/upload",
+      context: JSON.stringify(response.data),
+    });
+    return response.data;
+  } catch (e) {
+    return buildError(e);
+  }
+}
+
 async function queryRecord(soql) {
   try {
     const response = await sendRequest(
@@ -168,4 +232,6 @@ module.exports = {
   queryRecord,
   searchRecord,
   sendRealtimeAlertEvent,
+  uploadTranscript,
+  fetchUploadIdsStatus,
 };

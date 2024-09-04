@@ -23,7 +23,12 @@ function generatePrivatePublicKeyPair() {
       value: "SFDC",
     },
   ];
-  const pems = selfsigned.generate(attrs, { days: '7d' });
+    var pems = selfsigned.generate(attrs, {
+        keySize: 2048, // the size for the private key in bits (default: 1024)
+        days: "7d", // how long till expiry of the signed certificate (default: 365)
+        algorithm: "RS256",
+        extensions: [{ name: 'basicConstraints', cA: true }], // certificate extensions array
+    });
   return pems;
 }
 
@@ -50,7 +55,6 @@ describe('generateJWTWithActualKey', () => {
             privateKeyParamName: 'test_param_name',
             orgId: 'test_org_id',
             callCenterApiName: 'test_call_center_api_name',
-            allowInsecureKeySizes: true,
             expiresIn: '10m'
         });
 
