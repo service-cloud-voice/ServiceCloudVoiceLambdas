@@ -36,7 +36,7 @@ function shouldProcessCtr(ctrRecord) {
     return false;
   }
   return (
-    ["INBOUND", "OUTBOUND", "TRANSFER", "CALLBACK", "API"].includes(
+    ["INBOUND", "OUTBOUND", "TRANSFER", "CALLBACK", "API", "WEBRTC_API"].includes(
       ctrRecord.InitiationMethod
     ) &&
     ctrRecord.ContactId &&

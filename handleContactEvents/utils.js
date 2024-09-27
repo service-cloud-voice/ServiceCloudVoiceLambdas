@@ -1,17 +1,23 @@
+const contactEventDetailType = "Amazon Connect Contact Event";
+const contactEventInitiationMethods = ["INBOUND", "TRANSFER"];
+
 function isDisconnectedEventForAbandonedCall(event) {
   return (
-    event !== null &&
-    event !== undefined &&
-    event["detail-type"] === "Amazon Connect Contact Event" &&
-    event.detail !== null &&
-    event.detail !== undefined &&
-    (event.detail.initiationMethod === "INBOUND" ||
-      event.detail.initiationMethod === "TRANSFER") &&
-    event.detail.eventType === "DISCONNECTED" &&
-    (event.detail.agentInfo === null || event.detail.agentInfo === undefined)
-  );
+      event?.detail && event["detail-type"] === contactEventDetailType &&
+      contactEventInitiationMethods.includes(event.detail.initiationMethod) &&
+      event.detail.eventType === "DISCONNECTED" &&
+      !event.detail.agentInfo) || false;
+}
+
+function isRoutingCriteriaExpiredEventForCall(event) {
+  return (event?.detail?.routingCriteria && event["detail-type"] === contactEventDetailType &&
+      contactEventInitiationMethods.includes(event.detail.initiationMethod) &&
+      event.detail.eventType === "CONTACT_DATA_UPDATED" &&
+      event.detail.routingCriteria.steps[0]?.expression?.attributeCondition?.matchCriteria?.agentsCriteria &&
+      event.detail.routingCriteria.steps[0]?.status === 'EXPIRED') || false;
 }
 
 module.exports = {
   isDisconnectedEventForAbandonedCall,
+  isRoutingCriteriaExpiredEventForCall
 };

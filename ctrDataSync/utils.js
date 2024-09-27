@@ -6,6 +6,8 @@ const ERROR_DISCONNECT_REASON = [
   "OTHER",
 ];
 
+const WEBRTC_DEFAULT = "WebRTC_Default";
+
 /**
  * Filter call attributes to be included in API payload based on prefix and strip prefix
  *
@@ -69,6 +71,8 @@ function transformCTR(ctr) {
       if (ctr.CustomerEndpoint) {
         voiceCall.toNumber = ctr.CustomerEndpoint.Address;
       }
+    } else if (ctr.InitiationMethod === "WEBRTC_API") {
+      setWebRTCAttributeValue(ctr, voiceCall);
     } else {
       if (ctr.SystemEndpoint) {
         voiceCall.toNumber = ctr.SystemEndpoint.Address;
@@ -77,6 +81,7 @@ function transformCTR(ctr) {
         voiceCall.fromNumber = ctr.CustomerEndpoint.Address;
       }
     }
+    setCallSubtype(ctr, voiceCall);
   }
 
   if (ctr.Recording) {
@@ -104,6 +109,32 @@ function transformCTR(ctr) {
     context: { contactId: ctr.ContactId },
   });
   return { contactId: ctr.ContactId, fields: voiceCall };
+}
+
+function getWebRTCAttributeValue(attributeValue, endPoint) {
+  if (attributeValue) {
+    return attributeValue;
+  }
+  else if (endPoint && endPoint.Address) {
+    return endPoint.Address;
+  }
+  else {
+    return WEBRTC_DEFAULT;
+  }
+}
+
+function setWebRTCAttributeValue(ctr, voiceCall) {
+  voiceCall.fromNumber = getWebRTCAttributeValue(ctr.Attributes.WebRTC_From, ctr.SystemEndpoint);
+  voiceCall.toNumber = getWebRTCAttributeValue(ctr.Attributes.WebRTC_To, ctr.CustomerEndpoint);
+}
+
+function setCallSubtype(ctr, voiceCall) {
+  if (ctr.InitiationMethod === "WEBRTC_API") {
+    voiceCall.callSubType = "WebRTC";
+  }
+  else {
+    voiceCall.callSubType = "PSTN";
+  }
 }
 
 function parseData(data) {
