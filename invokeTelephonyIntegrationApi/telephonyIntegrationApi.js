@@ -202,10 +202,48 @@ async function cancelOmniFlowExecution(contactId) {
   return responseVal.data;
 }
 
+/**
+ * Reroute Flow Execution for Voice call
+ *
+ * @param {string} contactId - The vendor-specific ID or the SObject ID of the VoiceCall record which has to be rerouted.
+ *
+ * @return {object}
+ */
+async function rerouteFlowExecution(contactId) {
+  SCVLoggingUtil.info({
+    message: "rerouteFlowExecution Request created",
+    context: { contactId: contactId },
+  });
+  const jwt = await utils.generateJWT(generateJWTParams);
+  const responseVal = await axiosWrapper.scrtEndpoint
+      .patch(`/voiceCalls/${contactId}/reroute`, null, {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+      })
+      .then((response) => {
+        SCVLoggingUtil.info({
+          message: `Successfully triggered call rerouting for ${contactId}`,
+          context: { payload: response },
+        });
+        return response;
+      })
+      .catch((error) => {
+        SCVLoggingUtil.error({
+          message: `Error in Reroute Flow Execution with ${contactId}`,
+          context: { payload: error },
+        });
+        throw new Error("Error in Reroute Flow Execution");
+      });
+  return responseVal.data;
+}
+
 module.exports = {
   createVoiceCall,
   updateVoiceCall,
   executeOmniFlow,
   sendMessage,
   cancelOmniFlowExecution,
+  rerouteFlowExecution,
 };

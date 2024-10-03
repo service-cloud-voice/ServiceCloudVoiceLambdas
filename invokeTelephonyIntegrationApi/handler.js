@@ -3,6 +3,51 @@ const api = require("./telephonyIntegrationApi");
 const config = require("./config");
 const utils = require("./utils");
 
+const WEBRTC_DEFAULT = "WebRTC_Default";
+
+function getWebRTCAttributeValue(attributeValue, endPoint) {
+  if (attributeValue) {
+    return attributeValue;
+  }
+  else if (endPoint && endPoint.Address) {
+    return endPoint.Address;
+  }
+  else {
+    return WEBRTC_DEFAULT;
+  }
+}
+
+function getCallTypeSpecificAttributes(event) {
+  let callSubtype, from, to;
+
+  if (event.Details.ContactData.SegmentAttributes['connect:Subtype'].ValueString === 'connect:WebRTC') {
+    callSubtype = "WebRTC";
+  }
+  else{
+    callSubtype = "PSTN";
+  }
+
+  if (callSubtype === "WebRTC") {
+    from = getWebRTCAttributeValue(event.Details.ContactData.Attributes.WebRTC_From, event.Details.ContactData.CustomerEndpoint);
+    to = getWebRTCAttributeValue(event.Details.ContactData.Attributes.WebRTC_To, event.Details.ContactData.SystemEndpoint);
+  }
+  else {
+    from = event.Details.ContactData.CustomerEndpoint.Address;
+    to = event.Details.ContactData.SystemEndpoint.Address;
+  }
+
+  return {
+    to, from, callSubtype
+  };
+}
+
+function getParticipantKey(event, callSubtype) {
+  if (callSubtype === "WebRTC") {
+    return WEBRTC_DEFAULT;
+  }
+  return event.Details.ContactData.CustomerEndpoint.Address;
+}
+
 exports.handler = async (event) => {
   SCVLoggingUtil.debug({
     message: "InvokeTelephonyIntegrationApi event received",
@@ -26,24 +71,30 @@ exports.handler = async (event) => {
   });
   switch (methodName) {
     case "createVoiceCall":
+      let callTypeSpecificAttributes= getCallTypeSpecificAttributes(event);
       voiceCallFieldValues = {
         callCenterApiName: config.callCenterApiName,
         vendorCallKey: contactIdValue,
-        to: event.Details.ContactData.SystemEndpoint.Address,
-        from: event.Details.ContactData.CustomerEndpoint.Address,
+        to: callTypeSpecificAttributes.to,
+        from: callTypeSpecificAttributes.from,
         initiationMethod: "Inbound",
         startTime: new Date().toISOString(),
+        callSubtype: callTypeSpecificAttributes.callSubtype,
         callAttributes: utils.getCallAttributes(
           event.Details.ContactData.Attributes
         ),
         participants: [
           {
-            participantKey: event.Details.ContactData.CustomerEndpoint.Address,
+            participantKey: getParticipantKey(event, callTypeSpecificAttributes.callSubtype),
             type: "END_USER",
           },
         ],
       };
 
+      SCVLoggingUtil.debug({
+        message: `Invoke ${methodName} request with ${contactIdValue}`,
+        context: { contactId: contactIdValue, payload: voiceCallFieldValues },
+      });
       result = await api.createVoiceCall(voiceCallFieldValues);
       break;
     case "updateVoiceCall":
@@ -95,6 +146,9 @@ exports.handler = async (event) => {
     }
     case "cancelOmniFlowExecution":
       result = await api.cancelOmniFlowExecution(contactIdValue);
+      break;
+    case "rerouteFlowExecution":
+      result = await api.rerouteFlowExecution(contactIdValue);
       break;
     case "sendMessage":
       fieldValues.callCenterApiName = config.callCenterApiName;
