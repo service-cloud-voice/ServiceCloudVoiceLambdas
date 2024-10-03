@@ -287,13 +287,21 @@ Resources:
         PolicyDocument:
           Statement:
           - Action:
-            - connect:*
-            - kinesis:DescribeStream
-            - iam:PutRolePolicy
-            - iam:PassRole
             - kms:Decrypt
             Resource:
             - "*"
+            Effect: Allow
+          - Action:
+            - connect:*
+            - kinesis:DescribeStream
+            Resource:
+            - !Sub "arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+            - !GetAtt ContactLensStream.Arn
+            Effect: Allow
+          - Action:
+            - iam:PutRolePolicy
+            Resource:
+            - !Join [ "",[ !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/connect.amazonaws.com/','AWSServiceRoleForAmazonConnect_*' ] ]
             Effect: Allow
       RoleName: !Sub "${CallCenterApiName}-KinesisStreamStorageAssociateFunctionRole"
       
@@ -301,7 +309,7 @@ Resources:
     DependsOn: KinesisStreamStorageAssociateFunctionRoleResource
     Type: AWS::Lambda::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
     Properties:
-      Runtime: python3.8
+      Runtime: python3.11
       Handler: index.lambda_handler
       FunctionName: !Sub "${CallCenterApiName}-ContactLensKinesisStreamAssociateFunction"
       Role:
@@ -1764,4 +1772,4 @@ Metadata:
     ReadmeUrl: ../APP_README.md
     HomePageUrl: https://www.salesforce.com/products/service-cloud/solutions/call-center-management
     SourceCodeUrl: https://github.com/service-cloud-voice/ServiceCloudVoiceLambdas
-    SemanticVersion: 15.0.0
+    SemanticVersion: 16.1.0

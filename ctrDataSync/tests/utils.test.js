@@ -46,6 +46,7 @@ describe('transformCTR', () => {
             "queue":"Test",
             "recordingLocation":"abc.com",
             "callAttributes": "{\"sf_realtime_transcription_status\":\"passed\",\"UserInputNum__c\":10}",
+            "callSubType": "PSTN",
             "disconnectReason": {
                 "value": "TELECOM_PROBLEM",
                 "isError": true
@@ -86,6 +87,7 @@ describe('transformCTR', () => {
         "contactId":"1e67e495-edea-488e-b7cf-359e2f4ebfc1",
         "fields":{
             "initiationMethod":"INBOUND",
+            "callSubType": "PSTN",
             "disconnectReason": {
                 "value": "AGENT_HUNGUP",
                 "isError": false
