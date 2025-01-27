@@ -420,7 +420,7 @@ Resources:
               - '*'
       Environment:
         Variables:
-          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !Ref InvokeTelephonyIntegrationApiFunction.Alias
           LOG_LEVEL: "info"
       Layers:
         - Ref: ctrDataSyncFunctionLayer
@@ -449,7 +449,7 @@ Resources:
               - '*'
       Environment:
         Variables:
-          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !Ref InvokeTelephonyIntegrationApiFunction.Alias
           LOG_LEVEL: "info"
       Layers:
         - Ref: handleContactEventsFunctionLayer
@@ -488,7 +488,7 @@ Resources:
       Timeout: 30
       Environment:
         Variables:
-          INVOKE_KVS_TRANSCRIBER_ARN: !GetAtt kvsTranscriber.Arn
+          INVOKE_KVS_TRANSCRIBER_ARN: !Ref kvsTranscriber.Alias
           LOG_LEVEL: "info"
       Layers:
         - Ref: kvsConsumerTriggerFunctionLayer
@@ -875,7 +875,7 @@ Resources:
       CodeUri: realtimeAlert/
       Environment:
         Variables:
-          INVOKE_SALESFORCE_REST_API_ARN: !GetAtt InvokeSalesforceRestApiFunction.Arn
+          INVOKE_SALESFORCE_REST_API_ARN: !Ref InvokeSalesforceRestApiFunction.Alias
           LOG_LEVEL: "info"
 
       Handler: handler.handler
@@ -1697,7 +1697,7 @@ Resources:
       AutoPublishAlias: active
       Environment:
         Variables:
-          invoke_telephony_integration_api_arn: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+          invoke_telephony_integration_api_arn: !Ref InvokeTelephonyIntegrationApiFunction.Alias
           LOG_LEVEL: "info"
           delay_before_routing_vm_sec: 60
       Role: !GetAtt VoiceMailPackagingFunctionRole.Arn
