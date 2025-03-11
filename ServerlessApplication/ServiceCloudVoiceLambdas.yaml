@@ -85,7 +85,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   contactDataSyncFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -111,7 +111,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   authKeysSSMUtilFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -124,7 +124,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   invokeSalesforceRestApiFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -137,7 +137,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   invokeTelephonyIntegrationApiFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -150,7 +150,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   kvsConsumerTriggerFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -163,7 +163,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   PostCallAnalysisTriggerFunctionLayer:
     Type: AWS::Serverless::LayerVersion
@@ -176,7 +176,7 @@ Resources:
       LicenseInfo: ../LICENSE.md
       RetentionPolicy: Retain
     Metadata:
-       BuildMethod: nodejs20.x
+        BuildMethod: nodejs20.x
 
   ContactDataSyncFunction:
     Type: AWS::Serverless::Function
@@ -304,7 +304,7 @@ Resources:
             - !Join [ "",[ !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/connect.amazonaws.com/','AWSServiceRoleForAmazonConnect_*' ] ]
             Effect: Allow
       RoleName: !Sub "${CallCenterApiName}-KinesisStreamStorageAssociateFunctionRole"
-  
+      
   ContactLensKinesisStreamAssociateFunction:
     DependsOn: KinesisStreamStorageAssociateFunctionRoleResource
     Type: AWS::Lambda::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
@@ -841,7 +841,7 @@ Resources:
       FunctionName: !Ref HandleContactEventsFunction.Alias
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
-      SourceAccount: !Sub ${AWS::AccountId}    
+      SourceAccount: !Sub ${AWS::AccountId}      
       SourceArn:
         Fn::GetAtt:
           - "ContactEventsRule"
