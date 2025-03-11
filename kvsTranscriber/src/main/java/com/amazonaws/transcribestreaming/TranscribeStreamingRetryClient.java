@@ -222,7 +222,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
                 })
                 .onError(e -> {
                     // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
-                    logger.info("Reached onError.");
+                    logger.error("Reached onError.", e);
                 })
                 .onComplete(() -> {
                     // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
@@ -251,7 +251,7 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
                 })
                 .onError(e -> {
                     // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
-                    logger.info("Reached onError.");
+                    logger.error("Reached onError.", e);
                 })
                 .onComplete(() -> {
                     // Do nothing here. Don't close any streams that shouldn't be cleaned up yet.
@@ -264,7 +264,9 @@ public class TranscribeStreamingRetryClient implements AutoCloseable {
                     }
                     // We swallow any exception occurred while processing the MedicalTranscriptEvent and continue transcribing
                     // Transcribe errors will however cause the future to complete exceptionally and we'll retry (if applicable)
-                    catch (Exception ignored) {}
+                    catch (Exception e) {
+                        logger.error("Error while processing MedicalTranscriptEvent.", e);
+                    }
                 })
                 .build();
         return build;
