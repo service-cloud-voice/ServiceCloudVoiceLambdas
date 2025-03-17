@@ -81,10 +81,10 @@ public class TranscribedSegmentWriter {
                 String messageId = result.resultId();
 
                 // audioStartTimeStamp: passed from JS lambda, which in millisecond (long, like 1584048369054)
-                // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333) 
-                // we need to create startTime and endTime as timestamp in mill-seconds   
-                long startTime = Math.round(this.audioStartTimestamp + result.startTime() * 1000); 
-                long endTime = Math.round(this.audioStartTimestamp + result.endTime() * 1000); 
+                // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333)
+                // we need to create startTime and endTime as timestamp in mill-seconds
+                long startTime = Math.round(this.audioStartTimestamp + result.startTime() * 1000);
+                long endTime = Math.round(this.audioStartTimestamp + result.endTime() * 1000);
 
                 // send message
                 sendMessage(message, messageId, startTime, endTime);
@@ -103,10 +103,10 @@ public class TranscribedSegmentWriter {
                 String messageId = result.resultId();
 
                 // audioStartTimeStamp: passed from JS lambda, which in millisecond (long, like 1584048369054)
-                // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333) 
-                // we need to create startTime and endTime as timestamp in mill-seconds   
-                long startTime = Math.round(this.audioStartTimestamp + result.startTime() * 1000); 
-                long endTime = Math.round(this.audioStartTimestamp + result.endTime() * 1000); 
+                // result.startTime and result.endTime: relative time to audioStartTimeStamp in second (double, like: 3.333)
+                // we need to create startTime and endTime as timestamp in mill-seconds
+                long startTime = Math.round(this.audioStartTimestamp + result.startTime() * 1000);
+                long endTime = Math.round(this.audioStartTimestamp + result.endTime() * 1000);
 
                 // send message
                 sendMessage(message, messageId, startTime, endTime);
@@ -195,12 +195,13 @@ public class TranscribedSegmentWriter {
             // if JWT Token exist, verify if it is valid
             if (this.jwtToken != null && this.jwtToken.length() > 0 ) {
                 // validate if JWT token is valid or not. if it is valid, reuse existing token
-                Claims claims = Jwts.parser().setSigningKey(privKeyObject).parseClaimsJws(jwtToken).getBody();
+                Claims claims = Jwts.parser().setSigningKey(privKeyObject).build().parseSignedClaims(jwtToken).getPayload();
                 if (!claims.isEmpty())
                     return this.jwtToken;
             }
         } catch (Exception e) {
             // skip: go next block of code and regenerate token
+            SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.getJWTToken", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
         }
 
         // get private key from AWS SSM system
