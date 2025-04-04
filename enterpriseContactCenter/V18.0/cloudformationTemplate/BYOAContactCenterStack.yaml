@@ -1,0 +1,1120 @@
+Description:
+  CloudFormation template for Contact Center Provisioning stage for BYOT
+Parameters:
+  EnvironmentType:
+    Description: Environment type.
+    Default: PRODUCTION
+    Type: String
+    AllowedValues:
+      - PRODUCTION
+      - SANDBOX 
+  SalesforceOrgId:
+    AllowedPattern: "^00D[a-zA-Z0-9]{12}$"
+    Type: String
+    Description: Salesforce Organization ID
+  CallCenterApiName:
+    Type: String
+    Description: Salesforce CallCenter API name in lower case
+  SalesforceRestApiAuthPrivateKeyValue:
+    Default: salesforce-rest-api-auth-private-key-value
+    Type: String
+    Description: The value of the SSM parameter used to store the Salesforce REST API
+      auth private key.
+  SalesforceRestApiAuthConsumerKeyValue:
+    Default: salesforce-rest-api-auth-consumer-key-value
+    Type: String
+    Description: The value of the SSM parameter used to store the Salesforce REST API
+      auth consumer key.
+  SalesforceRestApiAuthAccessTokenKeyValue:
+    Default: salesforce-rest-api-auth-access-token-key-value
+    Type: String
+    Description: The value of the SSM parameter used to store the Salesforce REST API Access token.
+  S3BucketForTenantResources:
+    Type: String
+    Description: The S3 bucket that stores resources for subaccount, like voice recording, transcript.
+  S3BucketForScvResources:
+    Type: String
+    Description: The S3 bucket that stores SCV resources, like Lambda functions.
+  ConnectInstanceAlias:
+    Type: String
+    Description: Amazon Connect Instance Alias
+  ConnectInstanceId:
+    Type: String
+    Description: Connect Instance Id.
+  LightningDomainUrl:
+    Type: String
+    Description: Lightning Domain Url for adding approved origin
+  Scrt2MyDomainUrl:
+    Type: String
+    Description: SCRT2 My Domain URL.
+  RetentionHours:
+    Default: 0
+    Type: Number
+    Description: RetentionHours
+  OrgDomainName:
+    Type: String
+    Description: Org Domain Name
+  MpaId:
+    Type: String
+    Description: Master Payer Account Id
+  InstanceType:
+    Description: Connect Instance type.
+    Default: SOURCE
+    Type: String
+    AllowedValues:
+      - SOURCE
+      - REPLICA
+      - MULTIORG
+  Realm:
+    Description: Determines if env is commerical or RZone
+    Default: COMMERCIAL
+    Type: String
+    AllowedValues:
+      - COMMERCIAL
+      - RZONE_ISO_2
+  Version:
+    Type: String
+    Description: Stack Version and Lambda Version.
+    Default: V5
+  SalesforceRelease:
+    Type: String
+    Description: Salesforce Major Release Version
+  PermissionBoundaryARN:
+    Default: ''
+    Type: String
+    Description: IAM Permission Boundary ARN as defined by the admin
+
+Transform: "AWS::Serverless-2016-10-31"
+AWSTemplateFormatVersion: '2010-09-09'
+
+Outputs:
+  InvokeSalesforceRestApiFunction:
+    Description: InvokeSalesforceRestApi Lambda Function ARN
+    Value: !GetAtt InvokeSalesforceRestApiFunction.Arn
+  CTRDataSyncFunction:
+    Description: CTRDataSync Lambda Function ARN
+    Value: !GetAtt CTRDataSyncFunction.Arn
+  InvokeTelephonyIntegrationApiFunction:
+    Description: InvokeTelephonyIntegrationApi Lambda Function ARN
+    Value: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+  kvsTranscriber:
+    Description: kvsTranscriber Lambda Function ARN
+    Value: !GetAtt kvsTranscriber.Arn
+  kvsConsumerTrigger:
+    Description: kvsConsumerTrigger Lambda Function ARN
+    Value: !GetAtt kvsConsumerTrigger.Arn
+  AuthKeysSSMUtilFunction:
+    Description: AuthKeysSSMUtilFunction Lambda Function ARN
+    Value: !GetAtt AuthKeysSSMUtilFunction.Arn
+  HandleContactEventsFunction:
+    Description: HandleContactEventsFunction Lambda Function ARN
+    Value: !GetAtt HandleContactEventsFunction.Arn  
+  CTRStreamARN:
+    Description: CTR Kinesis Stream ARN
+    Value: !GetAtt CTRStream.Arn
+  S3Bucket:
+    Value: !Ref S3Bucket
+    Description: S3 Bucket for voice recording and transcript
+  ConnectSSORoleResource:
+    Description: Arn of the role used in the Connect SSO
+    Condition: UseSourceCondition
+    Value: !GetAtt ConnectSSORoleResource.Arn
+  ConnectCallRoleResource:
+    Description: Arn of the role used in the Connect Call Suspend/Resume recording
+    Condition: UseSourceCondition
+    Value: !GetAtt ConnectCallRoleResource.Arn
+  ScvDataStreamIdKey:
+    Description: KMS Kinesis Video Streams ARN for Encryption
+    Value: !GetAtt ScvDataStreamIdKey.Arn
+  LiveMediaStreamKmsKey:
+    Description: KMS Kinesis Video Streams ARN for Encryption
+    Value: !GetAtt LiveMediaStreamKmsKey.Arn
+  SCVS3RoleResource:
+    Description: S3 Bucket Role Resource
+    Condition: UseSourceCondition
+    Value: !GetAtt SCVS3RoleResource.Arn
+  ContactLensConsumerFunction:
+    Description: ContactLensConsumer Lambda Function ARN
+    Value: !GetAtt ContactLensConsumerFunction.Arn      
+  ContactLensStream:
+    Description: Contact Lens Transcription Kinesis Stream ARN
+    Value: !GetAtt ContactLensStream.Arn
+  ContactLensProcessorFunction:
+    Description: ContactLensProcessorFunction Lambda Function ARN
+    Value: !GetAtt ContactLensProcessorFunction.Arn
+  ContactDataSyncFunction:
+    Description: ContactDataSync Lambda Function ARN
+    Value: !GetAtt ContactDataSyncFunction.Arn
+
+Conditions:
+  UseProdCondition:
+    !Equals [!Ref EnvironmentType, PRODUCTION]
+  PermissionBoundaryIsNull: 
+    !Equals [!Ref PermissionBoundaryARN, '']
+  UseSourceCondition: !Or
+    - !Equals [ !Ref InstanceType, "SOURCE" ]
+    - !Equals [ !Ref InstanceType, "MULTIORG" ]
+  UseRZoneCondition:
+    !Equals [ !Ref Realm, RZONE_ISO_2]
+
+Resources:
+  CTRDataSyncFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/ctrDataSyncFunctionLayer${Version}'
+      Description: CTRDataSyncFunction node modules
+      LayerName: CTRDataSyncFunctionLayer
+  ContactDataSyncFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/contactDataSyncFunctionLayer${Version}'
+      Description: ContactDataSyncFunction node modules
+      LayerName: ContactDataSyncFunctionLayer
+  AuthKeysSSMUtilFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/authKeysSSMUtilFunctionLayer${Version}'
+      Description: AuthKeysSSMUtilFunction node modules
+      LayerName: AuthKeysSSMUtilFunctionLayer
+  InvokeSalesforceRestApiFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/invokeSfRestApiFunctionLayer${Version}'
+      Description: InvokeSalesforceRestApiFunction node modules
+      LayerName: InvokeSalesforceRestApiFunctionLayer
+  InvokeTelephonyIntegrationApiFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket:  !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/invokeTelephonyIntegrationApiFunctionLayer${Version}'
+      Description: InvokeTelephonyIntegrationApiFunction node modules
+      LayerName: InvokeTelephonyIntegrationApiFunctionLayer
+  KVSConsumerTriggerFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/kvsConsumerTriggerFunctionLayer${Version}'
+      Description: KVSConsumerTriggerFunction node modules
+      LayerName: KVSConsumerTriggerFunctionLayer
+  HandleContactEventsFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/handleContactEventsFunctionLayer${Version}'
+      Description: HandleContactEventsFunctionLayer node modules
+      LayerName: HandleContactEventsFunctionLayer
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${S3BucketForTenantResources}-${AWS::AccountId}"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      AccessControl: BucketOwnerFullControl
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3Bucket
+      PolicyDocument:
+        Statement:
+          -
+            Sid: PutObjectAccess
+            Action:
+              - s3:*
+            Effect: Allow
+            Principal:
+              AWS:
+                - Ref: AWS::AccountId
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}'
+          -
+            Sid: TranscriptionPolicy 
+            Action:
+              - s3:*
+            Effect: Allow
+            Principal:
+              Service:
+                - transcribe.amazonaws.com
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}'
+
+  CTRDataSyncFunctionStream:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 100
+      FunctionName:
+        Ref: CTRDataSyncFunction
+      EventSourceArn: !GetAtt CTRStream.Arn
+      StartingPosition: TRIM_HORIZON
+      BisectBatchOnFunctionError: true
+      MaximumRetryAttempts: 1
+  CTRDataSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/ctrDataSync${Version}"
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVCTRDataSyncFunctionRole"
+      Timeout: 5
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-CTRDataSyncFunction"
+      Layers:
+        - Ref: CTRDataSyncFunctionLayer
+      Description: After the Contract Trace Record (CTR) is created in Amazon, this Lambda function automatically syncs CTR data to the VoiceCall object.
+  InvokeTelephonyIntegrationApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/invokeTelephonyIntegrationApi${Version}"
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          LOG_LEVEL: "info"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${Scrt2MyDomainUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVInvokeTelephonyIntegrationApiFunctionRole"
+      Timeout: 8
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-InvokeTelephonyIntegrationApiFunction"
+      Layers:
+        - Ref: InvokeTelephonyIntegrationApiFunctionLayer
+      Description: This Lambda function either puts the VoiceCall records or executes the omni channel flow and returns the agent or queue routing instruction to contact flow
+  InvokeSalesforceRestApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/invokeSfRestApi${Version}"
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-salesforce-rest-api-auth-private-key"
+          CONSUMER_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-salesforce-rest-api-auth-consumer-key"
+          ACCESS_TOKEN_PARAM_NAME: !Sub "${CallCenterApiName}-salesforce-rest-api-access-token"
+          AUDIENCE:  !Sub "${CallCenterApiName}-salesforce-rest-api-audience"
+          SUBJECT: !Sub "${CallCenterApiName}-salesforce-rest-api-subject"
+          SALESFORCE_REST_API_ENDPOINT_BASE: !Sub "${OrgDomainName}/services/data/v54.0"
+          SALESFORCE_AUTH_ENDPOINT: !Sub "${OrgDomainName}/services/oauth2/token"
+          LOG_LEVEL: "info"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVInvokeSalesforceRestApiFunctionRole"
+      Timeout: 30
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-InvokeSalesforceRestApiFunction"
+      Layers:
+        - Ref: InvokeSalesforceRestApiFunctionLayer
+      Description: This Lambda function calls the Salesforce REST API. You can place this Lambda function within a contact flow to create, update, or query Salesforce records.
+  kvsTranscriber:
+    # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/kvsTranscriber${Version}"
+      Handler: com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService::handleRequest
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVKvsTranscriberRoleResource"
+      Runtime: java17
+      MemorySize: 512
+      Timeout: 900
+      Environment:
+        Variables:
+          APP_REGION: !Ref "AWS::Region"
+          TRANSCRIBE_REGION: "us-west-2"
+          START_SELECTOR_TYPE: "NOW"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          SCRT_ENDPOINT_BASE: !Sub "${Scrt2MyDomainUrl}"
+      FunctionName: !Sub "${CallCenterApiName}-kvsTranscriber"
+      Description: This Lambda function does the actual real-time transcription work. This function is not directly invoked from a contact flow.
+  kvsConsumerTrigger:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/kvsConsumerTrigger${Version}"
+      Handler: kvs_trigger.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVKvsConsumerTriggerRole"
+      Runtime: nodejs20.x
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          INVOKE_KVS_TRANSCRIBER_ARN: !Ref kvsTranscriber.Alias
+          LOG_LEVEL: "info"
+      FunctionName: !Sub "${CallCenterApiName}-kvsConsumerTrigger"
+      Layers:
+        - Ref: KVSConsumerTriggerFunctionLayer
+      Description: This Lambda function is the initiation point for starting real-time transcription.
+  AuthKeysSSMUtilFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/authKeysSSMUtil${Version}"
+      Handler: index.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVSSMLambdaExecutionRole"
+      Timeout: 60
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-AuthKeysSSMUtilFunction"
+      Layers:
+        - Ref: AuthKeysSSMUtilFunctionLayer
+      Description: It Creates the Private key in Param store and returns Public SSM key pair which is used for generating the JWT token for invokeTelephonyIntegrationApiFunction Lambda for authenticating to SCRT service.
+  HandleContactEventsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/handleContactEvents${Version}"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Timeout: 10
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-HandleContactEventsFunction"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVHandleContactEventsRole"
+      Environment:
+        Variables:
+          INVOKE_TELEPHONY_INTEGRATION_API_ARN: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+          LOG_LEVEL: "info"
+      Layers:
+        - Ref: HandleContactEventsFunctionLayer   
+      Description: This Lambda function handles the disconnect event for a missed or abandoned call and ensures that the PendingServiceRouting (PSR) record is cleaned up in Salesforce.
+  ContactDataSyncFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/contactDataSync${Version}"
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          CONNECT_INSTANCE_ID: !Sub "${ConnectInstanceId}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          MAX_CONTACT_IDS: 100
+          INVOKE_SALESFORCE_REST_API_ARN: !Ref InvokeSalesforceRestApiFunction.Alias
+          BATCH_SIZE: 10
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVContactDataSyncFunctionRole"
+      Timeout: 900
+      MemorySize: 512
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-ContactDataSyncFunction"
+      Layers:
+        - Ref: ContactDataSyncFunctionLayer
+      Description: This lambda function that adds transcripts from Contact lens in case of failure.
+  
+  # Lambda Permissions, to allow Amazon Connect to invoke it
+  InvokeTelephonyIntegrationApiFunctionPermission:  
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+  InvokeSalesforceRestApiFunctionPermission:  
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref InvokeSalesforceRestApiFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+  
+  KvsTranscriberPermission:  
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref kvsTranscriber.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+  
+  CTRDataSyncFunctionPermission:  
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CTRDataSyncFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+  
+  KvsConsumerTriggerPermission:  
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref kvsConsumerTrigger.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+  
+  AuthKeysSSMUtilFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AuthKeysSSMUtilFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+  PostCallAnalysisTriggerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref PostCallAnalysisTriggerFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+  ContactDataSyncFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ContactDataSyncFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+  CTRStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+      Name: !Sub '${CallCenterApiName}-${AWS::AccountId}-CTRStream'
+  SalesforceRestApiAuthPrivateKey:
+    Type: Custom::SalesforceRestApiAuthPrivateKey
+    Properties:
+      Create:
+        ParamName: !Sub "${CallCenterApiName}-salesforce-rest-api-auth-private-key"
+        ParamValue: !Sub "${SalesforceRestApiAuthPrivateKeyValue}"
+      ServiceToken: !GetAtt CustomSSMResource.Arn
+      Description: The value of the SSM parameter used to store the Salesforce REST API
+        auth private key.
+  SalesforceRestApiAuthConsumerKey:
+    Type: Custom::SalesforceRestApiAuthConsumerKey
+    Properties:
+      Create:
+        ParamName: !Sub "${CallCenterApiName}-salesforce-rest-api-auth-consumer-key"
+        ParamValue: !Sub "${SalesforceRestApiAuthConsumerKeyValue}"
+      ServiceToken: !GetAtt CustomSSMResource.Arn
+      Description: The value of the SSM parameter used to store the Salesforce REST API
+        auth consumer key.
+  SalesforceRestApiAccessToken:
+    Type: Custom::SalesforceRestApiAccessToken
+    Properties:
+      Create:
+        ParamName: !Sub "${CallCenterApiName}-salesforce-rest-api-access-token"
+        ParamValue: !Sub "${SalesforceRestApiAuthAccessTokenKeyValue}"
+      ServiceToken: !GetAtt CustomSSMResource.Arn
+      Description: The value of the SSM parameter used to store the Salesforce REST API access token.
+  SalesforceRestApiAudience:
+    Type: Custom::SalesforceRestApiAudience
+    Properties:
+      Create:
+        ParamName: !Sub "${CallCenterApiName}-salesforce-rest-api-audience"
+        ParamValue:
+          !If [UseProdCondition, "https://login.salesforce.com/", "https://test.salesforce.com/"]
+      ServiceToken: !GetAtt CustomSSMResource.Arn
+      Description: The value of the SSM parameter used to store the Salesforce REST API Audience.
+  SalesforceRestApiSubject:
+    Type: Custom::SalesforceRestApiSubject
+    Properties:
+      Create:
+        ParamName: !Sub "${CallCenterApiName}-salesforce-rest-api-subject"
+        ParamValue: !Sub 'salesforce-rest-api-auth-subject'
+      ServiceToken: !GetAtt CustomSSMResource.Arn
+      Description: The value of the SSM parameter used to store the Salesforce REST API Subject.
+  ScvDataStreamIdKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: True
+      KeyPolicy:
+        Statement:
+          - Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:GenerateDataKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:CreateGrant
+              - kms:DescribeKey
+              - kms:UntagResource
+              - kms:TagResource
+            Effect: Allow
+            Principal:
+              AWS:
+                !Join
+                  - ""
+                  - - "arn:"
+                    - !Ref AWS::Partition
+                    - ":iam::"
+                    - !Ref AWS::AccountId
+                    - ":root"
+            Resource: "*"
+        Version: '2012-10-17'
+      Description: KMS Media Stream Key used to encrypt Live Media Streaming
+  ScvKey:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${CallCenterApiName}KvsKey"
+      TargetKeyId:
+        Ref: ScvDataStreamIdKey
+  LiveMediaStreamKmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: True
+      KeyPolicy:
+        Statement:
+          - Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:GenerateDataKey
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:CreateGrant
+              - kms:DescribeKey
+              - kms:UntagResource
+              - kms:TagResource
+            Effect: Allow
+            Principal:
+              AWS:
+                !Join
+                  - ""
+                  - - "arn:"
+                    - !Ref AWS::Partition
+                    - ":iam::"
+                    - !Ref AWS::AccountId
+                    - ":root"
+            Resource: "*"
+        Version: '2012-10-17'
+      Description: KMS Media Stream Key used to encrypt Live Media Streaming
+  LiveMediaStreamKVSKey:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/${CallCenterApiName}LMKvsKey"
+      TargetKeyId:
+        Ref: LiveMediaStreamKmsKey
+  CustomSSMResource:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: "index.lambda_handler"
+      Runtime: python3.11
+      Timeout: 30
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVSSMLambdaExecutionRole"
+      Code:
+        ZipFile:
+          !Sub |
+            import boto3
+            from botocore.exceptions import ClientError
+            import json
+            import cfnresponse
+
+            SUCCESS = "SUCCESS"
+            FAILED = "FAILED"
+
+            ssm = boto3.client("ssm")
+            logger = boto3.client('logs')
+
+            def create_ssm(name, value):
+              try:
+                resp = ssm.put_parameter(Name=name,Value=value,Type='SecureString',Description='SSM SecureString')
+                return(True, resp['ResponseMetadata']['RequestId'])
+              except Exception as e:
+                return (False, "Cannot create Secure String: " + str(e))
+
+            def update_ssm(name, value):
+              try:
+                existing_param = ssm.get_parameter(Name=name, WithDecryption=True)
+                reason = "SSM Secure String with Name {} already exists.".format(name)
+                return True, reason
+              except ssm.exceptions.ParameterNotFound:
+                create_res, create_reason = create_ssm(name, value)
+                if create_res:
+                  reason = "Missing SSM Param with Name {} created successfully.".format(name)
+                  return True, reason
+                else:
+                  return False, create_reason
+              except Exception as e:
+                return False, "Cannot update Secure String: " + str(e)
+
+            def delete_ssm(name):
+              try:
+                resp = ssm.delete_parameter(Name=name)
+                return (True, "SSM Secure String with Name " + name + " deleted")
+              except Exception as e:
+                return (False, "Cannot delete Secure String: " + str(e))
+
+            def lambda_handler(event, context):
+              ssm_name = event['ResourceProperties']['Create']['ParamName']
+              ssm_value = event['ResourceProperties']['Create']['ParamValue']
+              ssm_arn = ""
+
+              if event['RequestType'] == 'Create':
+                res, ssm_arn = create_ssm(ssm_name, ssm_value)
+                reason = "Creation succeeded"
+              elif event['RequestType'] == 'Update':
+                res, reason = update_ssm(ssm_name, ssm_value)
+              elif event['RequestType'] == 'Delete':
+                res, reason = delete_ssm(ssm_name)
+              else:
+                res = False
+                reason = "Unknown operation: " + event['RequestType']
+
+              responseData = {}
+              responseData['Reason'] = reason
+              if res:
+                cfnresponse.send(event, context, SUCCESS, responseData, ssm_arn)
+              else:
+                cfnresponse.send(event, context, FAILED, responseData, ssm_arn)
+      FunctionName: !Sub "${CallCenterApiName}-CustomSSMFunction"
+      Description: This Lambda function adds the salesforce rest api token and salesforce consumer key in param stores, which is used for making any rest api calls to salesforce database
+  ConnectSSORoleResource:
+    Condition: UseSourceCondition
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+          - !If
+            - UseRZoneCondition
+            -
+              Action: "sts:AssumeRoleWithSAML"
+              Effect: "Allow"
+              Condition:
+                StringEquals:
+                  "saml:aud": https://signin.amazonaws-us-gov.com/saml
+              Principal:
+                Federated: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:saml-provider/SalesforceServiceVoiceIdp_${SalesforceOrgId}"
+            -
+              Action: "sts:AssumeRoleWithSAML"
+              Effect: "Allow"
+              Condition:
+                StringEquals:
+                  "saml:aud": https://signin.aws.amazon.com/saml
+              Principal:
+                Federated: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:saml-provider/SalesforceServiceVoiceIdp_${SalesforceOrgId}"
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action: "connect:GetFederationToken"
+                Effect: "Allow"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:connect:*:${AWS::AccountId}:instance/${ConnectInstanceId}/user/${!aws:userid}"
+                Sid: "ConnectSSOPolicySid"
+            Version: "2012-10-17"
+          PolicyName: !Sub "${CallCenterApiName}-SAMLPolicy"
+      RoleName: !Sub "${CallCenterApiName}-SAMLRole"
+  ConnectCallRoleResource:
+    Condition: UseSourceCondition
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              AWS:
+                !Join
+                  - ""
+                  - - "arn:"
+                    - !Ref "AWS::Partition"
+                    - ":iam::"
+                    - !Ref MpaId
+                    - ":root"
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - "connect:SuspendContactRecording"
+                  - "connect:ResumeContactRecording"
+                Effect: "Allow"
+                Resource: !Sub "arn:${AWS::Partition}:connect:*:${AWS::AccountId}:instance/${ConnectInstanceId}/contact/*"
+                Sid: "ConnectCallRoleSid"
+            Version: "2012-10-17"
+          PolicyName: !Sub "${CallCenterApiName}-ConnectCallPoly"
+      RoleName: !Sub "${CallCenterApiName}-ConnectCallRole"
+  SCVS3RoleResource:
+    Condition: UseSourceCondition
+    Type: "AWS::IAM::Role"
+    DependsOn: 
+      - S3Bucket
+    Properties:
+      PermissionsBoundary:
+        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            AWS:
+              !Join
+              - ""
+              - - "arn:"
+                - !Ref "AWS::Partition"
+                - ":iam::"
+                - !Ref MpaId
+                - ":root"
+        Version: "2012-10-17"
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - "kms:Decrypt"
+            Effect: "Allow"
+            Resource: '*'
+          - Action:
+            - "s3:GetObject"
+            - "s3:ListBucket"
+            Effect: "Allow"
+            Resource:
+            - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/*'
+            - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/*'
+            Sid: !Sub "${CallCenterApiName}SCVS3Sid"
+          Version: "2012-10-17"
+        PolicyName: !Sub "${CallCenterApiName}-SCVS3Policy"
+      RoleName: !Sub "${CallCenterApiName}-SCVS3Role"
+      MaxSessionDuration: 14400
+
+  EventRulesStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: 
+      - HandleContactEventsFunction
+      - InvokeTelephonyIntegrationApiFunction
+    DeletionPolicy: Delete
+    Properties:
+      TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/EventRulesStack${Version}.yaml"
+      Parameters:
+        HandleContactEventsFunctionAliasActive: !Ref HandleContactEventsFunction.Alias
+        InvokeTelephonyIntegrationApiFunctionAliasActive: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+        CallCenterApiName: !Ref CallCenterApiName
+
+
+  RealtimeAlertStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - HandleContactEventsFunction
+      - InvokeTelephonyIntegrationApiFunction
+      - ContactLensConsumerFunction
+      - kvsConsumerTrigger
+      - CTRDataSyncFunction
+      - ContactDataSyncFunction
+      - InvokeSalesforceRestApiFunction
+      - kvsTranscriber
+    Properties:
+      TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/RealtimeAlertStack${Version}.yaml"
+      Parameters:
+        InvokeSalesforceRestApiArn: !Ref InvokeSalesforceRestApiFunction.Alias
+        CallCenterApiName: !Sub "${CallCenterApiName}"
+        ConnectInstanceId: !Sub "${ConnectInstanceId}"
+        Version: !Sub "${Version}"
+        S3BucketForScvResources: !Sub "${S3BucketForScvResources}"
+        RealtimeAlertRole: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVRealtimeAlertRole"
+        InvokeTelephonyIntegrationApiFunctionName: !Ref InvokeTelephonyIntegrationApiFunction
+        InvokeSalesforceRestApiFunctionName: !Ref InvokeSalesforceRestApiFunction
+        CTRDataSyncFunctionName: !Ref CTRDataSyncFunction
+        ContactDataSyncFunctionName: !Ref ContactDataSyncFunction
+        kvsConsumerTriggerName: !Ref kvsConsumerTrigger
+        kvsTranscriberName: !Ref kvsTranscriber
+        HandleContactEventsFunctionName: !Ref HandleContactEventsFunction
+        ContactLensConsumerFunctionName: !Ref ContactLensConsumerFunction
+        VoiceMailAudioProcessingFunctionName: !GetAtt
+                                              - VoiceMailStack
+                                              - Outputs.VoiceMailAudioProcessingFunction
+        VoiceMailPackagingFunctionName: !GetAtt
+                                        - VoiceMailStack
+                                        - Outputs.VoiceMailPackagingFunction
+        VoiceMailTranscribeFunctionName: !GetAtt
+                                         - VoiceMailStack
+                                         - Outputs.VoiceMailTranscribeFunction
+        SalesforceRelease: !Sub "${SalesforceRelease}"
+        InstanceType: !Sub "${InstanceType}"
+
+  VoiceMailStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - CTRStream
+    Properties:
+      TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/VoiceMailStack${Version}.yaml"
+      Parameters:
+        Version: !Sub "${Version}"
+        S3BucketForTenantResources: !Ref S3Bucket
+        S3BucketForScvResources: !Sub "${S3BucketForScvResources}"
+        CallCenterApiName: !Sub "${CallCenterApiName}"
+        CTRStreamARN: !GetAtt CTRStream.Arn
+        VoiceMailAudioProcessingRole: 'SCVVoiceMailAudioProcessingRole'
+        VoiceMailTranscribeRole: 'SCVVoiceMailTranscribeRole'
+        VoiceMailPackagingRole: 'SCVVoiceMailPackagingRole'
+        InvokeTelephonyIntegrationApiARN: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+        ConnectInstanceId: !Sub "${ConnectInstanceId}"
+        SalesforceRelease: !Sub "${SalesforceRelease}"
+
+  ConnectConfigurationStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - CTRStream
+      - ContactLensStream
+      - S3Bucket
+      - LiveMediaStreamKmsKey
+      - InvokeTelephonyIntegrationApiFunction
+      - ContactLensConsumerFunction
+      - kvsConsumerTrigger
+      - InvokeSalesforceRestApiFunction
+    Properties:
+      TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/ConnectConfigurationStack${Version}.yaml"
+      Parameters:
+        CallCenterApiName: !Sub "${CallCenterApiName}"
+        ConnectInstanceAlias: !Sub "${ConnectInstanceAlias}"
+        ConnectInstanceId: !Sub "${ConnectInstanceId}"
+        MyDomainUrl: !Sub "${OrgDomainName}"
+        S3BucketForTenantResources: !Ref S3Bucket
+        LightningDomainUrl: !Sub "${LightningDomainUrl}"
+        KMSArn: !GetAtt LiveMediaStreamKmsKey.Arn
+        ConnectConfiguratorLambdaRole: "SCVConnectConfiguratorLambdaRole"
+        KinesisStreamArnForCTR: !GetAtt CTRStream.Arn
+        InvokeTelephonyApiLambdaArn: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+        ContactLensConsumerLambdaArn: !GetAtt ContactLensConsumerFunction.Arn
+        KvsConsumerTriggerLambdaArn: !GetAtt kvsConsumerTrigger.Arn
+        KinesisStreamArnForContactLens: !GetAtt ContactLensStream.Arn
+        InvokeSfRestApiLambdaArn: !GetAtt InvokeSalesforceRestApiFunction.Arn
+        RetentionHours: !Sub "${RetentionHours}"
+        InstanceType: !Sub "${InstanceType}"
+  PostCallAnalysisTriggerFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/postCallAnalysisTriggerFunctionLayer${Version}'
+      Description: PostCallAnalysisTriggerFunction node modules
+      LayerName: PostCallAnalysisTriggerFunctionLayer
+
+  PostCallAnalysisTriggerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/postCallAnalysisTrigger${Version}"
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          LOG_LEVEL: "info"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${Scrt2MyDomainUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVPostCallAnalysisTriggerFunctionRole"
+      Timeout: 900
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-PostCallAnalysisTriggerFunction"
+      Layers:
+        - Ref: PostCallAnalysisTriggerFunctionLayer
+      Description: This lambda function gets invoked when the call is done. 
+      
+  PostCallAnalysisTriggerFunctionAsyncConfig:
+    Type: AWS::Lambda::EventInvokeConfig
+    Properties:
+      FunctionName: 
+        Ref: PostCallAnalysisTriggerFunction
+      MaximumRetryAttempts: 0
+      Qualifier: $LATEST
+
+  ContactLensStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      ShardCount: 1
+      Name: !Sub '${CallCenterApiName}-${AWS::AccountId}-ContactLensStream'
+  
+  ContactLensProcessorFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/contactLensProcessorFunctionLayer${Version}'
+      Description: ContactLensProcessorFunction node modules
+      LayerName: ContactLensProcessorFunctionLayer
+
+  ContactLensProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/contactLensProcessor${Version}"
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${Scrt2MyDomainUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          USE_SSM_LAMBDA_EXTENSION: false
+          SSM_PARAMETER_STORE_TTL: 60
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVContactLensConsumerFunctionRole"
+      Timeout: 180
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-ContactLensProcessorFunction"
+      Layers:
+        - Ref: ContactLensProcessorFunctionLayer
+      Description: This Lambda function process the transcripts and sends them to salesforce. This gets invoked by contactlensconsumer lambda function
+  
+  ContactLensConsumerFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket:
+            !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key:
+            !Sub '${SalesforceRelease}/contactLensConsumerFunctionLayer${Version}'
+      Description: ContactLensConsumerFunction node modules for pilot
+      LayerName: ContactLensConsumerFunctionLayer
+
+  ContactLensConsumerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/contactLensConsumer${Version}"
+      MemorySize: 256
+      Environment:
+        Variables:
+          PRIVATE_KEY_PARAM_NAME: !Sub "${CallCenterApiName}-scrt-jwt-auth-private-key"
+          LOG_LEVEL: "info"
+          SALESFORCE_ORG_ID: !Sub "${SalesforceOrgId}"
+          SCRT_ENDPOINT_BASE: !Sub "${Scrt2MyDomainUrl}"
+          CALL_CENTER_API_NAME: !Sub "${CallCenterApiName}"
+          CONTACT_LENS_PROCESSOR_FUNCTION_ARN: !Ref ContactLensProcessorFunction.Alias
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVContactLensConsumerFunctionRole"
+      Timeout: 60
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-ContactLensConsumerFunction"
+      Layers:
+        - Ref: ContactLensConsumerFunctionLayer
+      Description: This Lambda function gets real-time transcripts and intelligance signals generated from Contact lens for amazon connect and sends them to the contactlensprocessor Lambda function.
+
+  ContactLensConsumerFunctionStream:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      ParallelizationFactor: 4
+      BatchSize: 5
+      MaximumBatchingWindowInSeconds: 1
+      MaximumRecordAgeInSeconds: 180
+      FunctionName:
+        Ref: ContactLensConsumerFunction
+      EventSourceArn: !GetAtt ContactLensStream.Arn
+      StartingPosition: TRIM_HORIZON
+      BisectBatchOnFunctionError: true
+      MaximumRetryAttempts: 0
+
+  ContactLensConsumerFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ContactLensConsumerFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+Metadata:
+  StageName : ServiceVoiceContactCenterProvision
+  Author: Salesforce Service Cloud
+  Description: Service Cloud Voice Contact Center Provisioning Stack for BYOT

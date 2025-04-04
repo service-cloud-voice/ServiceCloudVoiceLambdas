@@ -1,0 +1,858 @@
+---
+Description: |
+  Service Voice Tenant Provisioning for BYOA
+Parameters:
+  MpaId:
+    Default: 793525387755
+    Type: String
+    Description: Master Payer Account Id
+  S3BucketForScvResources:
+    Default: prod-byoa-scv-resources
+    Type: String
+    Description: The S3 bucket that stores SCV resources, like Lambda functions.
+  S3BucketForSamlDocument:
+    Type: String
+    Description: The S3 bucket that stores saml data
+  SalesforceRelease:
+    Type: String
+    Description: Salesforce Major Release Version
+  Version:
+    Type: String
+    Description: Stack Version and Lambda Version.
+    Default: V14.0
+  PermissionBoundaryARN:
+    Default: ''
+    Type: String
+    Description: IAM Permission Boundary ARN as defined by the admin
+
+Conditions:
+  PermissionBoundaryIsNull: 
+    !Equals [!Ref PermissionBoundaryARN, '']
+
+Resources:
+  SCVManagedPolicyStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/SCVManagedPolicyStack${Version}.yaml"
+      Parameters:
+        Sku: !Sub "BYOA"
+
+  SCVCTRDataSyncFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.KMSManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.KinesisDataStreamManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.LambdaManagedPolicyResource
+      RoleName: "SCVCTRDataSyncFunctionRole"
+      Description: Contact Trace Records data sync Lambda function (CTRDataSyncFunction) assumes this role to invoke SCV Update Voice Call 
+  SCVContactDataSyncFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+          !If [ PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+      Policies:
+        - PolicyName: ContactDataSyncFunctionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - "connect:DescribeContact"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                  - "s3:ListAllMyBuckets"
+                Resource:
+                  - "*"
+                Effect: Allow
+      RoleName: "SCVContactDataSyncFunctionRole"
+      Description: Contact Data sync Lambda function assumes this role to invoke backfill transcripts from Contact lens.
+  SCVPostCallAnalysisTriggerFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.SSMManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KMSManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.AmazonConnectManagedPolicyResource
+      Policies:
+        - PolicyName: PostCallAnalysisTriggerFunctionRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - "connect:DescribeContact"
+                  - "s3:GetObject"
+                  - "s3:GetBucketNotification"
+                Resource:
+                  - "*"
+                Effect: Allow
+      RoleName: "SCVPostCallAnalysisTriggerFunctionRole"
+      Description: PostCallAnalysisTriggerFunction Lambda function assumes this role to send analytics events once voice call ends to persist contact lens generated intelligence signals. 
+  SCVInvokeTelephonyIntegrationApiFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.SSMManagedPolicyResource
+      RoleName: "SCVInvokeTelephonyIntegrationApiFunctionRole"
+      Description: InvokeTelephonyIntegrationApiFunction Lambda function assumes this role to create Service cloud voice calls to invoke CreateVoiceCall API explained here https://developer.salesforce.com/docs/atlas.en-us.voice_developer_guide.meta/voice_developer_guide/voice_rest_voicecalls_create.htm
+  SCVInvokeSalesforceRestApiFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.SSMManagedPolicyResource
+      RoleName: "SCVInvokeSalesforceRestApiFunctionRole"
+      Description: InvokeSalesforceRestApiFunction lambda function assumes this role to perform Salesforce REST API operations. 
+  SCVSSMLambdaExecutionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "lambda.amazonaws.com"
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.SSMManagedPolicyResource
+      RoleName: "SCVSSMLambdaExecutionRole"
+      Description: Salesforce Provisioning Service assumes this role to create "Systems Manager" -- "Parameter Store" -- "Secure String" typed parameters. 
+  SCVUpdateCredentialRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [ PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN ]
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            AWS: !Sub "arn:${AWS::Partition}:iam::${MpaId}:root"
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: SCVUpdateCredentialRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - lambda:InvokeFunction
+                  - lambda:InvokeAsync
+                  - lambda:ListFunctions
+                  - lambda:AddPermission
+                  - lambda:RemovePermission
+                Resource:
+                  - !Join ["",[!Sub 'arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:','*AuthKeysSSMUtilFunction*']]
+                Effect: Allow
+      RoleName: "SCVUpdateCredentialRole"
+      Description: ScvIntegrationUser assumes this role to invoke AuthKeysSSMUtilFunction.
+  SCVKvsTranscriberRoleResource:
+    Type: "AWS::IAM::Role"
+    Metadata:
+      cfn_nag:
+        rules_to_suppress:
+        - id: F3
+          reason: transcribe:* do not support resource-level permissions and kinesisvideo streams are dynamically created and therefore cannot be specificed directly
+        - id: W11
+          reason: transcribe:* do not support resource-level permissions and kinesisvideo streams are dynamically created and therefore cannot be specificed directly
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KMSManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.SSMManagedPolicyResource
+      Policies:
+        -
+          PolicyName: scv-kvs-streaming-transcribe-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action:
+                  - "transcribe:DeleteTranscriptionJob"
+                  - "transcribe:DeleteMedicalTranscriptionJob"
+                  - "transcribe:GetTranscriptionJob"
+                  - "transcribe:GetMedicalTranscriptionJob"
+                  - "transcribe:GetVocabulary"
+                  - "transcribe:GetMedicalVocabulary"
+                  - "transcribe:GetVocabularyFilter"
+                  - "transcribe:ListTranscriptionJobs"
+                  - "transcribe:ListMedicalTranscriptionJobs"
+                  - "transcribe:ListVocabularies"
+                  - "transcribe:ListMedicalVocabularies"
+                  - "transcribe:ListVocabularyFilters"
+                  - "transcribe:StartStreamTranscription"
+                  - "transcribe:StartMedicalStreamTranscription"
+                  - "transcribe:StartTranscriptionJob"
+                  - "transcribe:StartMedicalTranscriptionJob"
+                Resource: 
+                  - "*"
+              -
+                Effect: "Allow"
+                Action:
+                  - "kinesisvideo:Describe*"
+                  - "kinesisvideo:Get*"
+                  - "kinesisvideo:List*"
+                Resource: "*"
+              - Effect: "Allow"
+                Action:
+                  - "connect:UpdateContactAttributes"
+                Resource:
+                  - "*"
+      RoleName: "SCVKvsTranscriberRoleResource"
+      Description: KvsTranscriber lambda function (AWS Transcribe service based transcription purpose lambda) assumes this role to send transcription data based on the amazon connect's video stream. 
+  SCVKvsConsumerTriggerRoleResource:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+      RoleName: "SCVKvsConsumerTriggerRole"
+      Description: KvsConsumerTrigger Lambda function triggers the KVSTranscriber to invoke and process Kinesis Video stream. 
+  SCVContactLensConsumerFunctionRoleResource:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:  
+          -
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "lambda.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.KMSManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.KinesisDataStreamManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.LambdaManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.SSMManagedPolicyResource
+      RoleName: "SCVContactLensConsumerFunctionRole" 
+      Description: ContactLensConsumerFunction lambda function assumes this role to enable Contact lens based Real time transcription. 
+  SCVAmazonConnectManagementRoleResource:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            AWS: !Sub "arn:${AWS::Partition}:iam::${MpaId}:root"
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.KinesisDataStreamManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.KMSManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.AmazonConnectManagedPolicyResource
+      RoleName: "SCVAmazonConnectManagementRole"
+      Description: Salesforce Provisioning service assumes this role to perform amazon connect configuration tasks such as create/remove users, routing profiles, queues, quick connects etc.  This role and its defined trusted relationship is required to make sure that all the amazon connect management related functions can be done via Salesforce provisioning service. 
+  SCVConnectConfiguratorLambdaRoleResource:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+        !If [ PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.AmazonConnectManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KMSManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KinesisDataStreamManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+              - "s3:ListAllMyBuckets"
+              - "s3:GetBucketLocation"
+              - "s3:GetBucketAcl"
+              - "s3:CreateBucket"
+            Effect: "Allow"
+            Resource: "*"
+            Sid: "ConnectConfiguratorLambdaS3RoleSid"
+          - Action:
+              - "ds:DescribeDirectories"
+            Effect: "Allow"
+            Resource: "*"
+            Sid: "ConnectConfiguratorLambdaDSRoleSid"
+          - Action:
+            - "iam:PutRolePolicy"
+            Effect: "Allow"
+            Resource:
+              - !Join [ "",[ !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/connect.amazonaws.com/','AWSServiceRoleForAmazonConnect_*' ] ]
+            Sid: "ConnectConfiguratorLambdaIAMRoleSid"
+          Version: "2012-10-17"
+        PolicyName: "SCVConnectConfiguratorLambdaRolePolicy"
+      RoleName: "SCVConnectConfiguratorLambdaRole"
+      Description: Salesforce Provisioning service is creating a lambda called "ConnectConfigurationFunction" which assumes this role to perform amazon connect management/configuration functions such as associating storage config, associate lambda functions etc. 
+  SCVContactLensStreamingRoleResource:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement: 
+        -
+          Effect: "Allow"
+          Principal:
+            Service:
+              - "connect.amazonaws.com"
+          Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KMSManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KinesisDataStreamManagedPolicyResource
+      RoleName: "SCVContactLensStreamingRoleResource" 
+  SCVIDPLambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "lambda.amazonaws.com"
+        Version: "2012-10-17"
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - iam:*SamlProvider
+            Effect: "Allow"
+            Resource:
+              - !Join ["",[!Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:saml-provider/SalesforceServiceVoiceIdp*']]
+            Sid: "IDPLambdaRoleSid"
+          - Action:
+            - s3:Get*
+            Effect: "Allow"
+            Resource:
+              - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForSamlDocument}/*"
+          Version: "2012-10-17"
+        PolicyName: "IDPLambdaPolicy"
+      RoleName: "SCVIDPLambdaRole"
+      Description: Salesforce provisioning service is creating a lambda resource named "ProviderCreator" which is used to create "IAM" -- "Identity Provider" using Salesforce as an identity provider. This role is assumed by ProviderCreator lambda.
+  CloudTrailS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "scv-${AWS::AccountId}-byoa-cloudtrail"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      AccessControl: BucketOwnerFullControl
+      LifecycleConfiguration: 
+        Rules: 
+          - Id: DeleteContentAfter90Days
+            Status: Enabled
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailS3Bucket
+      PolicyDocument:
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource:
+              - !GetAtt CloudTrailS3Bucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: 
+              - cloudtrail.amazonaws.com
+              - delivery.logs.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              - !Sub "${CloudTrailS3Bucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "s3:x-amz-acl": "bucket-owner-full-control"
+          - Sid: AllowRootToGet
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:root
+            Action: 
+              - s3:List*
+              - s3:Get*
+            Resource:
+              - !Sub "${CloudTrailS3Bucket.Arn}/*"
+              - !Sub "${CloudTrailS3Bucket.Arn}"
+          - Sid: RequireSSL
+            Effect: Deny
+            Principal:
+              AWS: "*"
+            Action: s3:*
+            Resource:
+              - !Sub "${CloudTrailS3Bucket.Arn}/*"
+            Condition:
+              StringEquals:
+                "aws:SecureTransport": "false"
+            
+  TrailLogGroup:
+    Type: 'AWS::Logs::LogGroup'
+    Description: Log group which contains all the event data
+    Properties:
+      LogGroupName: "scvbyoaaccesscloudwatchloggroup"
+      RetentionInDays: 7
+  TrailLogGroupRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      PermissionsBoundary:
+        !If [ PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN ]
+      RoleName: "BYOATrailLogGroupRole"
+      Description: scvCloudTrail is assuming this role to produce all the event record data into S3 Bucket created for cloudtrail purpose. 
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Sid: AssumeRole1
+          Effect: Allow
+          Principal:
+            Service: 'cloudtrail.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: 'cloudtrail-policy'
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'logs:CreateLogStream'
+            - 'logs:PutLogEvents'
+            Resource: !GetAtt 'TrailLogGroup.Arn'
+  Trail:
+    Type: 'AWS::CloudTrail::Trail'
+    DependsOn: 
+      - S3BucketPolicy
+    Properties:
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EventSelectors: 
+        - IncludeManagementEvents: true
+          ReadWriteType: All
+      S3BucketName: !Ref CloudTrailS3Bucket
+      EnableLogFileValidation: true
+      CloudWatchLogsLogGroupArn: !GetAtt 'TrailLogGroup.Arn'
+      CloudWatchLogsRoleArn: !GetAtt 'TrailLogGroupRole.Arn'
+      TrailName: "scvBYOACloudTrail"
+  
+  SCVVoiceMailAudioProcessingRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonKinesisVideoStreamsReadOnlyAccess"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KMSManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.KinesisDataStreamManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+      Policies:
+        - PolicyName: SCVVoiceMailAudioProcessingRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource:
+                  - "*"
+                Effect: Allow
+      RoleName: "SCVVoiceMailAudioProcessingRole"
+      Description: VoiceMailAudioProcessing lambda function assumes this role to process CTR Kinesis Data stream to capture audio recording files recorded as part of the customer's voice mail. 
+  SCVVoiceMailPackagingRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.SSMManagedPolicyResource
+      Policies:
+        - PolicyName: SCVVoiceMailPackagingRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - connect:UpdateContactAttributes
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectTagging
+                  - s3:PutObjectTagging
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:ListTranscriptionJobs
+                Resource:
+                  - "*"
+                Effect: Allow
+      RoleName: "SCVVoiceMailPackagingRole"
+      Description: VoiceMailPackagingFunction lambda function assumes this role to call CTR and execute OmniFlow API to enable VoiceMail functionality.
+
+  SCVVoiceMailTranscribeRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.SSMManagedPolicyResource
+      Policies:
+        - PolicyName: SCVVoiceMailTranscribeRolePolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Action:
+                  - transcribe:DeleteTranscriptionJob
+                  - transcribe:DeleteMedicalTranscriptionJob
+                  - transcribe:GetTranscriptionJob
+                  - transcribe:GetMedicalTranscriptionJob
+                  - transcribe:GetVocabulary
+                  - transcribe:GetMedicalVocabulary
+                  - transcribe:GetVocabularyFilter
+                  - transcribe:ListTranscriptionJobs
+                  - transcribe:ListMedicalTranscriptionJobs
+                  - transcribe:ListVocabularies
+                  - transcribe:ListMedicalVocabularies
+                  - transcribe:ListVocabularyFilters
+                  - transcribe:StartStreamTranscription
+                  - transcribe:StartMedicalStreamTranscription
+                  - transcribe:StartTranscriptionJob
+                  - transcribe:StartMedicalTranscriptionJob
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - connect:UpdateContactAttributes
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:GetObjectTagging
+                  - s3:PutObjectTagging
+                Resource:
+                  - "*"
+                Effect: Allow  
+      RoleName: "SCVVoiceMailTranscribeRole"
+      Description: VoiceMailTranscribeFunction lambda function assumes this role to process audio recording files to produce voice mail transcription.
+  RealtimeAlertRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [ PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.SSMManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+      Policies:
+        - PolicyName: RealtimeAlertRolePolicy
+          PolicyDocument:
+            Statement:
+              - Action:
+                  - connect:Get*
+                  - connect:Describe*
+                  - connect:List*
+                Resource:
+                  - "*"
+                Effect: Allow
+      RoleName: "SCVRealtimeAlertRole"
+      Description: RealtimeAlert lambda function assumes this role to create SCV real time alert via invoking Salesforce Rest API which will publish RealtimeAlertEvent. 
+
+  HandleContactEventsRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [ PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN ]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.LambdaManagedPolicyResource
+      RoleName: "SCVHandleContactEventsRole"
+      Description: HandleContactEventsFunction assumes this role
+Outputs:
+  SCVCTRDataSyncFunctionRoleResource:
+    Description: Implicit IAM Role created for CTRDataSyncFunction
+    Value: !GetAtt SCVCTRDataSyncFunctionRoleResource.Arn
+  SCVInvokeTelephonyIntegrationApiFunctionRoleResource:
+    Description: Implicit IAM Role created for InvokeTelephonyIntegrationApiFunction
+    Value: !GetAtt SCVInvokeTelephonyIntegrationApiFunctionRoleResource.Arn
+  SCVPostCallAnalysisTriggerFunctionRoleResource:
+    Description: Implicit IAM Role created for PostCallAnalysisTriggerFunction
+    Value: !GetAtt SCVPostCallAnalysisTriggerFunctionRoleResource.Arn
+  SCVInvokeSalesforceRestApiFunctionRoleResource:
+    Description: Implicit IAM Role created for InvokeSalesforceRestApiFunction
+    Value: !GetAtt SCVInvokeSalesforceRestApiFunctionRoleResource.Arn
+  SCVSSMLambdaExecutionRoleResource:
+    Description: Implicit IAM Role created for SSMLambdaExecution
+    Value: !GetAtt SCVSSMLambdaExecutionRoleResource.Arn
+  SCVUpdateCredentialRoleResource:
+    Description: IAM Role created for AuthKeysSSMUtilFunction
+    Value: !GetAtt SCVUpdateCredentialRoleResource.Arn
+  SCVKvsTranscriberRoleResource:
+    Description: SCVKvsTranscriberRoleResource output
+    Value: !GetAtt SCVKvsTranscriberRoleResource.Arn
+  SCVKvsConsumerTriggerRoleResource:
+    Description: SCVKvsConsumerTriggerRoleResource output
+    Value: !GetAtt SCVKvsConsumerTriggerRoleResource.Arn
+  SCVAmazonConnectManagementRoleResource:
+    Description: IAM role created for operational actionable resources
+    Value: !GetAtt SCVAmazonConnectManagementRoleResource.Arn
+  SCVContactLensConsumerFunctionRoleResource:
+    Description: Implicit IAM Role created for ContactLensConsumerFunction
+    Value: !GetAtt SCVContactLensConsumerFunctionRoleResource.Arn
+  SCVContactLensStreamingRoleResource:
+    Description: Implicit IAM Role created for connect instances contact lens realtime streaming
+    Value: !GetAtt SCVContactLensStreamingRoleResource.Arn
+  SCVContactDataSyncFunctionRoleResource:
+    Description: Implicit IAM Role created for ContactDataSyncFunction
+    Value: !GetAtt SCVContactDataSyncFunctionRoleResource.Arn
+  SCVIDPLambdaExecutionRoleArn:
+    Description: ARN of the SCVIDPLambdaExecutionRole
+    Value: !GetAtt SCVIDPLambdaExecutionRole.Arn
+    
+Metadata:
+  StageName : ServiceVoiceBYOATenantProvisioning
+  Author: Salesforce Service Cloud
+  Description: Service Cloud Voice Tenant Provisioning Cloudformation for BYOA

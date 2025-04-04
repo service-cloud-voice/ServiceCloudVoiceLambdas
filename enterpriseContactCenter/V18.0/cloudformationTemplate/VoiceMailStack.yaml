@@ -1,0 +1,199 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: "AWS::Serverless-2016-10-31"
+Description:
+  CloudFormation template for voice mail Provisioning stage.
+Parameters:
+  Version:
+    Description: Stack Version and Lambda Version.
+    Type: String
+  VoiceMailAudioProcessingRole:
+    Description: Role assigned for VoiceMailAudioProcessing
+    Type: String
+  VoiceMailTranscribeRole:
+    Description: Role assigned for VoiceMailTranscribe
+    Type: String
+  VoiceMailPackagingRole:
+    Description: Role assigned for VoiceMailPackaging
+    Type: String
+  ConnectInstanceId:
+    Description: Connect Instance ID
+    Type: String
+  S3BucketForTenantResources:
+    Description: S3 bucket to store voice mail and transcript.
+    Type: String
+  S3BucketForScvResources:
+    Description: S3 bucket to store lambda function
+    Type: String
+  CallCenterApiName:
+      Description: Salesforce CallCenter API name in lower case
+      Type: String
+  CTRStreamARN:
+    Description: CTR Kinesis Stream ARN
+    Type: String
+  InvokeTelephonyIntegrationApiARN:
+    Description: InvokeTelephonyIntegrationApiFunction ARN
+    Type: String
+  SalesforceRelease:
+    Type: String
+    Description: Salesforce Major Release Version
+
+Outputs:
+  VoiceMailAudioProcessingFunction:
+    Description: VoiceMailAudioProcessingFunction Lambda Function ARN
+    Value: !Ref VoiceMailAudioProcessingFunction
+  VoiceMailTranscribeFunction:
+    Description: VoiceMailTranscribeFunction Lambda Function ARN
+    Value: !Ref VoiceMailTranscribeFunction
+  VoiceMailPackagingFunction:
+    Description: VoiceMailPackagingFunction Lambda Function ARN
+    Value: !Ref VoiceMailPackagingFunction
+
+
+Resources:
+  VoiceMailAudioProcessingFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/voiceMailAudioProcessingFunctionLayer${Version}'
+      Description: voiceMailAudioProcessing node modules
+      LayerName: VoiceMailAudioProcessingFunctionLayer
+  VoiceMailTranscribeFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/voiceMailTranscribeFunctionLayer${Version}'
+      Description: voiceMailAudioProcessing node modules
+      LayerName: VoiceMailTranscribeFunctionLayer
+
+  VoiceMailPackagingFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs20.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/voiceMailPackagingFunctionLayer${Version}'
+      Description: voiceMailAudioProcessing node modules
+      LayerName: VoiceMailPackagingFunctionLayer
+
+
+  VoiceMailAudioProcessingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/voiceMailAudioProcessing${Version}"
+      Environment:
+        Variables:
+          s3_recordings_bucket: !Ref S3BucketForTenantResources
+          LOG_LEVEL: "info"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${VoiceMailAudioProcessingRole}"
+      Timeout: 30
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-VoiceMailAudioProcessingFunction"
+      Layers:
+        - Ref: VoiceMailAudioProcessingFunctionLayer
+      Description: This Lambda function processes voicemail recordings
+
+  VoiceMailTranscribeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/voiceMailTranscribe${Version}"
+      Environment:
+        Variables:
+          TRANSCRIBE_REGION: "us-west-2"
+          LOG_LEVEL: "info"
+      Handler: handler.handler
+      Events:
+        S3EventBridgeRule:
+          Type: EventBridgeRule
+          Properties:
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - "Object Created"
+              detail:
+                bucket:
+                  name:
+                    - !Ref S3BucketForTenantResources
+                object:
+                  key: [ { "prefix": "voicemail_recordings/" } ]
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${VoiceMailTranscribeRole}"
+      Timeout: 5
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-VoiceMailTranscribeFunction"
+      Layers:
+        - Ref: VoiceMailTranscribeFunctionLayer
+      Description: This Lambda function transcribes voicemail recordings.
+  VoiceMailPackagingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/voiceMailPackaging${Version}"
+      Environment:
+        Variables:
+          invoke_telephony_integration_api_arn: !Ref InvokeTelephonyIntegrationApiARN
+          LOG_LEVEL: "info"
+          delay_before_routing_vm_sec: 60
+      Handler: handler.handler
+      Events:
+        S3EventBridgeRule:
+          Type: EventBridgeRule
+          Properties:
+            RetryPolicy:
+              MaximumRetryAttempts: 0
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - "Object Created"
+              detail:
+                bucket:
+                  name:
+                    - !Ref S3BucketForTenantResources
+                object:
+                  key: [ { "prefix": "voicemail_transcripts/" } ]
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${VoiceMailPackagingRole}"
+      Timeout: 400
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-VoiceMailPackagingFunction"
+      Layers:
+        - Ref: VoiceMailPackagingFunctionLayer
+      Description: This Lambda function creates a VoiceCall record, attaches the voicemail recording and transcription files to the record, and routes it all to the Omni-Channel flow.
+
+  VoiceMailPackagingFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref VoiceMailPackagingFunction.Alias
+      Action: lambda:InvokeFunction
+      Principal: connect.amazonaws.com
+      SourceAccount: !Sub ${AWS::AccountId}
+      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+  VoiceMailAudioProcessingFunctionStream:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      BatchSize: 10
+      Enabled: true
+      FunctionName: !Ref VoiceMailAudioProcessingFunction
+      EventSourceArn: !Ref CTRStreamARN
+      StartingPosition: TRIM_HORIZON
+      MaximumRetryAttempts: 1
+
