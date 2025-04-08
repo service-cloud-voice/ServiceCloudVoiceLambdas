@@ -13,4 +13,5 @@ module.exports = {
   tokenValidFor: "3m",
   salesforceAuthEndpoint: process.env.SALESFORCE_AUTH_ENDPOINT,
   salesforceRestApiEndpointBase: process.env.SALESFORCE_REST_API_ENDPOINT_BASE,
+  callCenterApiName: process.env.CALL_CENTER_API_NAME,
 };

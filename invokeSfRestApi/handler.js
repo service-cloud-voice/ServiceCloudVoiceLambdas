@@ -4,6 +4,7 @@ const api = require("./sfRestApi");
 const queryEngine = require("./queryEngine");
 const utils = require("./utils");
 const SFSPhoneCallFlow = require("./SFSPhoneCallFlow");
+const { fetchOutboundPhoneNumber } = require("./fetchOutboundPhoneNumber");
 
 // --------------- Events -----------------------
 
@@ -78,6 +79,10 @@ exports.handler = async (event) => {
     case "SFSPhoneCallFlowQuery": {
       const res = await SFSPhoneCallFlow.entryPoint(event);
       result = flatten(res);
+      break;
+    }
+    case "fetchOutboundPhoneNumber": {
+      result = await fetchOutboundPhoneNumber(event);
       break;
     }
     default: {
