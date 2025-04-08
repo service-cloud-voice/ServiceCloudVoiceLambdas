@@ -13,7 +13,7 @@ const uuid = require('uuid');
 // });
 // const generateJWT = rewiredUtils.__get__('generateJWT');
 
-afterEach(() => {    
+afterEach(() => {
   jest.clearAllMocks();
 });
 
@@ -51,3 +51,37 @@ describe('formatObjectApiName', () => {
         expect(utils.formatObjectApiName('CoNtAcT')).toBe('Contact');
     });
 });
+
+describe('getRealtimeAlertEventFieldValuesFromConnectLambdaParams', () => {
+    it('test getRealtimeAlertEventFieldValuesFromConnectLambdaParams', () => {
+        var params = {
+            'a' : 'A',
+            'methodName' : 'methodNameValue'
+        }
+        var res = utils.getRealtimeAlertEventFieldValuesFromConnectLambdaParams(params);
+        expect(res.a).toBe('A');
+        expect(res.methodName).toBe(undefined);
+    });
+});
+
+describe('getSObjectFieldValuesFromConnectLambdaParams', () => {
+    it('test getSObjectFieldValuesFromConnectLambdaParams', () => {
+        var params = {
+            'a' : 'A',
+            'methodName' : 'methodNameValue'
+        }
+        var res = utils.getSObjectFieldValuesFromConnectLambdaParams(params);
+        expect(res.a).toBe('A');
+        expect(res.methodName).toBe(undefined);
+    });
+});
+
+/*
+describe('getAccessToken', () => {
+    it('test getAccessToken', async () => {
+        var arr = ['abc', 'def'];
+        //SSM.getParameters.mockImplementationOnce(() => Promise.resolve({ data: arr }));
+        await utils.getAccessToken(true);
+    });
+});
+*/
