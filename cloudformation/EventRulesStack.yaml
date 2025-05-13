@@ -1,0 +1,63 @@
+Description:
+  CloudFormation template for Contact Center Eventbridge Rules Provisioning stage.
+Parameters:
+  HandleContactEventsFunctionAliasActive:
+    Type: String
+    Description: HandleContactEvents lambda function alias active arn
+  InvokeTelephonyIntegrationApiFunctionAliasActive:
+    Type: String
+    Description: InvokeTelephonyIntegrationApi lambda function alias active arn
+  CallCenterApiName:
+    Type: String
+    Description: Salesforce CallCenter API name in lower case
+
+Transform: "AWS::Serverless-2016-10-31"
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  ContactEventsRule:
+    Type: 'AWS::Events::Rule'
+    Properties:
+      EventPattern: {
+          "source":["aws.connect"],
+          "detail-type": ["Amazon Connect Contact Event"],
+          "detail" : {"eventType": ["DISCONNECTED", "CONTACT_DATA_UPDATED"]}
+        }
+      Name: !Sub "${CallCenterApiName}-ContactEventsRule"
+      State: "ENABLED"
+      Targets:
+        - Arn: !Sub "${HandleContactEventsFunctionAliasActive}"
+          Id: "HandleContactEventsFunctionId"
+
+  ContactEventsRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Sub "${HandleContactEventsFunctionAliasActive}"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceAccount: !Sub ${AWS::AccountId}      
+      SourceArn: !GetAtt ContactEventsRule.Arn
+
+  ScheduledRule: 
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: "The event rule to keep Lambda warm"
+      ScheduleExpression: "rate(5 minutes)"
+      State: "ENABLED"
+      Name: !Sub "${CallCenterApiName}-ScheduledRule"
+      Targets: 
+        - Arn: !Sub "${InvokeTelephonyIntegrationApiFunctionAliasActive}"
+          Id: "InvokeTelephonyIntegrationApiFunctionId"
+
+  ScheduledRulePermission: 
+    Type: AWS::Lambda::Permission
+    Properties: 
+      FunctionName: !Sub "${InvokeTelephonyIntegrationApiFunctionAliasActive}"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt ScheduledRule.Arn
+
+Metadata:
+  StageName : ServiceVoiceContactCenterProvision
+  Author: Salesforce Service Cloud
+  Description: Service Cloud Voice Contact Center Eventbridge Rules Provisioning Stack.

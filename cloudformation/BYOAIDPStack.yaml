@@ -1,0 +1,151 @@
+---
+Description: |
+  Service Voice Tenant Provisioning for BYOA
+Parameters:
+  S3BucketForSamlDocument:
+    Type: String
+    Description: The S3 bucket that stores saml data 
+  SAMLFileInS3:
+    Type: String
+    Description: The Object name for the saml
+  SalesforceOrgId:
+    AllowedPattern: "^00D[a-zA-Z0-9]{12}$"
+    Type: String
+    Description: Salesforce Organization ID
+  PermissionBoundaryARN:
+    Default: ''
+    Type: String
+    Description: IAM Permission Boundary ARN as defined by the admin
+
+
+Conditions:
+  PermissionBoundaryIsNull: 
+    !Equals [!Ref PermissionBoundaryARN, '']
+
+Resources:
+  IdentityProvider:
+    Type: Custom::IdentityProvider
+    Description: Creates an identity provider for authentication 
+    Properties:
+      ServiceToken: !GetAtt ProviderCreator.Arn
+      Region: !Ref "AWS::Region"
+      Metadata: !Ref SAMLFileInS3
+      S3BucketForSaml: !Ref S3BucketForSamlDocument
+      Name: !Sub  "SalesforceServiceVoiceIdp_${SalesforceOrgId}"
+  ProviderCreator:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Role: !Sub  arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVIDPLambdaRole
+      Timeout: 30
+      Description: This lambda function creates IAM -- IdentityProvider using salesforce as an identity provider
+      Code:
+        ZipFile: !Sub |
+          import boto3
+          from botocore.exceptions import ClientError
+          import json
+          import cfnresponse
+          import re
+
+          iam = boto3.client("iam")
+          s3 = boto3.client("s3")
+          def create_provider(name, doc,s3bucketForSaml):
+            try:
+              arn = "arn:${AWS::Partition}:iam::${AWS::AccountId}:saml-provider/" + name
+              resp = iam.get_saml_provider(SAMLProviderArn=arn)
+              return(True, arn)
+            except Exception as e:
+              # If the idp doesn't exist, get_saml_provider throws out an exception
+              try:
+                saml = get_saml_data(s3bucketForSaml,doc)
+                resp = iam.create_saml_provider(SAMLMetadataDocument=saml,Name=name)
+                return(True, resp['SAMLProviderArn'])
+              except Exception as ex:
+                return (False, "Cannot create SAML provider: " + str(ex))
+
+          def delete_provider(arn):
+            try:
+              resp = iam.delete_saml_provider(SAMLProviderArn=arn)
+              return (True, "SAML provider with ARN " + arn + " deleted")
+            except ClientError as e:
+              if e.response['Error']['Code'] == "NoSuchEntity":
+                # no need to delete a thing that doesn't exist
+                return (True, "SAML provider with ARN " + arn + " does not exist, deletion succeeded")
+              else:
+                return (False, "Cannot delete SAML provider with ARN " + arn + ": " + str(e))
+            except Exception as e:
+              return (False, "Cannot delete SAML provider with ARN " + arn + ": " + str(e))
+          def get_saml_data(bucket,key):
+            try:
+              objdata=s3.get_object(Bucket=bucket, Key=key)
+              readdata=""
+              if objdata and objdata['Body']:
+                readdata=objdata['Body'].read().decode('utf-8')
+              return readdata
+            except Exception as e:
+              raise Exception(e)
+          def update_provider(name, doc,s3bucketForSaml):
+            # Need to create the ARN from the name
+            arn = "arn:${AWS::Partition}:iam::${AWS::AccountId}:saml-provider/" + name
+            try:
+              saml = get_saml_data(s3bucketForSaml,doc)  
+              trimmed_doc = saml.replace('\n', '').replace('\r', '').replace(" ","")
+              validUntil_doc = re.findall(r'(validUntil="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3}Z")', saml)
+              if validUntil_doc:
+                validUntil_date1 = validUntil_doc[0]
+                trimmed_doc = trimmed_doc.replace(validUntil_date1,'')
+              existing_metadata = iam.get_saml_provider(SAMLProviderArn=arn)['SAMLMetadataDocument']
+              trimed_existing_metadata = existing_metadata.replace('\n', '').replace('\r', '').replace(" ","")
+              validUntil_existing = re.findall(r'(validUntil="[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}.[0-9]{3}Z")', existing_metadata)
+              if validUntil_existing:
+                validUntil_date2 = validUntil_existing[0]
+                trimed_existing_metadata = trimed_existing_metadata.replace(validUntil_date2,'')
+              if trimed_existing_metadata == trimmed_doc:                                    
+                return (True, "SAML provider " + arn + " Skipped as it is up-to-date")
+              else:                
+                resp = iam.update_saml_provider(SAMLMetadataDocument=saml, SAMLProviderArn=arn)
+                return (True, "SAML provider " + arn + " updated")
+            except Exception as e:
+              if e.response['Error']['Code'] == "NoSuchEntity":
+                  # Create if resource not exists
+                  return create_provider(name, doc,s3bucketForSaml)
+              return (False, "Cannot update SAML provider " + arn + ": " + str(e))
+
+          def lambda_handler(event, context):
+            provider_xml = event['ResourceProperties']['Metadata']
+            s3bucket = event['ResourceProperties']['S3BucketForSaml']
+            provider_name = event['ResourceProperties']['Name']
+            # create a default ARN from the name; will be overwritten if we are creating
+            provider_arn = "arn:${AWS::Partition}:iam::${AWS::AccountId}:saml-provider/" + provider_name
+
+            if event['RequestType'] == 'Create':
+              res, provider_arn = create_provider(provider_name, provider_xml,s3bucket)
+              reason = "Creation succeeded"
+            elif event['RequestType'] == 'Update':
+              res, reason = update_provider(provider_name, provider_xml,s3bucket)
+            elif event['RequestType'] == 'Delete':
+              res, reason = delete_provider(provider_arn)
+            else:
+              res = False
+              resp = "Unknown operation: " + event['RequestType']
+
+            responseData = {}
+            responseData['Reason'] = reason
+            responseData['Arn'] = provider_arn
+            if res:
+              cfnresponse.send(event, context, cfnresponse.SUCCESS, responseData, provider_arn)
+            else:
+              cfnresponse.send(event, context, cfnresponse.FAILED, responseData, provider_arn)
+  
+Outputs:  
+  IdentityProvider:
+    Description: Identity provider arn
+    Value: !GetAtt IdentityProvider.Arn
+  
+    
+Metadata:
+  StageName : ServiceVoiceBYOAIDPSatckManualProvisioning
+  Author: Salesforce Service Cloud
+  Description: Service Cloud Voice Identity Provider manual Provisioning Cloudformation for BYOA

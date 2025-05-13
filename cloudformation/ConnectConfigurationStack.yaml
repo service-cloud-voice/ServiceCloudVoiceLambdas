@@ -1,0 +1,446 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description:
+  CloudFormation template for Amazon Connect supplement configuration.
+Parameters:
+  CallCenterApiName:
+    Type: String
+    Description: Salesforce CallCenter API name in lower case
+  ConnectInstanceAlias:
+    Type: String
+    Description: Amazon Connect Instance Alias
+  ConnectInstanceId:
+    Type: String
+    Description: Amazon Connect Instance Id
+  MyDomainUrl:
+    Type: String
+    Description: My Domain Url to add for approved Origins
+  S3BucketForTenantResources:
+    Type: String
+    Description: S3 bucket to store voice mail and transcript.
+  LightningDomainUrl:
+    Type: String
+    Description: Lightning Domain Url to add for approved Origins
+  KMSArn:
+    Type: String
+    Description: KMS ARN
+  ConnectConfiguratorLambdaRole:
+    Type: String
+    Description: ConnectConfiguratorLambdaRole
+  KinesisStreamArnForCTR:
+    Type: String
+    Description: Kinesis Stream ARN For CTR data sync function
+  InvokeTelephonyApiLambdaArn:
+    Type: String
+    Description: Invoke Telephony API Lambda Arn
+  ContactLensConsumerLambdaArn:
+    Type: String
+    Description: ContactLensConsumer Lambda Arn
+  KvsConsumerTriggerLambdaArn:
+    Type: String
+    Description: KvsConsumerTrigger Lambda Arn
+  KinesisStreamArnForContactLens:
+    Type: String
+    Description: Kinesis Stream ARN For lens function
+  InvokeSfRestApiLambdaArn:
+    Type: String
+    Description: InvokeSfRestApi Lambda Arn
+  RetentionHours:
+    Default: 0
+    Type: Number
+    Description: Retention hours for Kinesis Live Media Streaming
+  InstanceType:
+    Description: Connect Instance type.
+    Default: SOURCE
+    Type: String
+    AllowedValues:
+      - SOURCE
+      - REPLICA
+      - MULTIORG
+
+Conditions:
+  UseSourceCondition:
+    !Equals [ !Ref InstanceType, SOURCE]
+
+Resources:
+  RoutingPredefinedAttribute:
+    Condition: UseSourceCondition
+    Type: 'AWS::Connect::PredefinedAttribute'
+    Properties:
+      InstanceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      Name: "Routing"
+      Values: 
+        StringList: 
+          - "True"
+  MyDomainApprovedOriginDisAssociation:
+    Type: Custom::MyDomainApprovedOriginDisAssociation
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "DISASSOCIATE_RESOURCES"
+      ResourceValue: !Sub "${MyDomainUrl}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Removing the approved origin association 
+  LightningDomainApprovedOriginDisAssociation:
+    Type: Custom::LightningDomainApprovedOriginDisAssociation
+    DependsOn: MyDomainApprovedOriginAssociation
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "DISASSOCIATE_RESOURCES"
+      ResourceValue: !Sub "${LightningDomainUrl}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Removing the approved origin association 
+  MyDomainApprovedOriginAssociation:
+    Type: AWS::Connect::ApprovedOrigin
+    DependsOn: MyDomainApprovedOriginDisAssociation
+    Properties:
+      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      Origin: !Sub "${MyDomainUrl}"
+  LightningDomainApprovedOriginAssociation:
+    Type: AWS::Connect::ApprovedOrigin
+    DependsOn: LightningDomainApprovedOriginDisAssociation
+    Properties:
+      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      Origin: !Sub "${LightningDomainUrl}"
+  InvokeTelephonyLambdaDisAssociationResource:
+    Type: Custom::InvokeTelephonyLambdaDisAssociationResource
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "DISASSOCIATE_LAMBDA"
+      ResourceValue: !Sub "${InvokeTelephonyApiLambdaArn}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Removing the lambda association 
+  KvsConsumerTriggerDisAssociationResource:
+    Type: Custom::KvsConsumerTriggerDisAssociationResource
+    DependsOn: InvokeTelephonyLambdaAssociationResource
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "DISASSOCIATE_LAMBDA"
+      ResourceValue: !Sub "${KvsConsumerTriggerLambdaArn}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Removing the lambda association 
+  InvokeSfRestApiDisAssociationResource:
+    Type: Custom::InvokeSfRestApiDisAssociationResource
+    DependsOn: KvsConsumerTriggerAssociationResource
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "DISASSOCIATE_LAMBDA"
+      ResourceValue: !Sub "${InvokeSfRestApiLambdaArn}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Removing the lambda association 
+  ContactLensConsumerDisAssociationResource:
+    Type: Custom::ContactLensConsumerDisAssociationResource
+    DependsOn: InvokeSfRestApiAssociationResource
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "DISASSOCIATE_LAMBDA"
+      ResourceValue: !Sub "${ContactLensConsumerLambdaArn}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Removing the lambda association 
+  CallRecordingStorage:
+    Type: Custom::CallRecordingStorage
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "ADD_S3_BUCKET"
+      ResourceValue:
+        StorageType: "S3"
+        S3Config:
+          BucketName: !Ref S3BucketForTenantResources
+          BucketPrefix: !Sub "${ConnectInstanceAlias}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: The S3 Storgage config to associate for the Call Recordings
+  LiveMediaStreamingStorage:
+    Type: Custom::LiveMediaStreamingStorage
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "LIVE_MEDIA_STREAMING"
+      ResourceValue:
+        StorageType: "KINESIS_VIDEO_STREAM"
+        KinesisVideoStreamConfig:
+          Prefix: !Sub "${ConnectInstanceAlias}"
+          RetentionPeriodHours: !Sub "${RetentionHours}"
+          EncryptionConfig:
+            EncryptionType: !Sub "KMS"
+            KeyId: !Sub "${KMSArn}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: The Live Media Stream storage config to associate for the Real Time Transcription
+  KinesisDataStreamConfigForCTR:
+    Type: Custom::KinesisDataStreamConfigForCTR
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "KINESIS_DATA_STREAMING_CTR"
+      ResourceValue:
+        StorageType: "KINESIS_STREAM"
+        KinesisStreamConfig:
+          StreamArn: !Sub "${KinesisStreamArnForCTR}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: The Kinesis data stream config for CTR
+  KinesisDataStreamConfigForContactLens:
+    Type: Custom::KinesisDataStreamConfigForContactLens
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "KINESIS_DATA_STREAMING_CONTACT_LENS"
+      ResourceValue:
+        StorageType: "KINESIS_STREAM"
+        KinesisStreamConfig:
+          StreamArn: !Sub "${KinesisStreamArnForContactLens}"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: The Kinesis data stream config for CTR
+  InvokeTelephonyLambdaAssociationResource:
+    Type: AWS::Connect::IntegrationAssociation
+    DependsOn: InvokeTelephonyLambdaDisAssociationResource
+    Properties:
+      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      IntegrationArn: !Sub "${InvokeTelephonyApiLambdaArn}:active"
+      IntegrationType: "LAMBDA_FUNCTION"
+  KvsConsumerTriggerAssociationResource:
+    Type: AWS::Connect::IntegrationAssociation
+    DependsOn: KvsConsumerTriggerDisAssociationResource
+    Properties:
+      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      IntegrationArn: !Sub "${KvsConsumerTriggerLambdaArn}:active"
+      IntegrationType: "LAMBDA_FUNCTION"
+  InvokeSfRestApiAssociationResource:
+    Type: AWS::Connect::IntegrationAssociation
+    DependsOn: InvokeSfRestApiDisAssociationResource
+    Properties:
+      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      IntegrationArn: !Sub "${InvokeSfRestApiLambdaArn}:active"
+      IntegrationType: "LAMBDA_FUNCTION"
+  ContactLensConsumerAssociationResource:
+    Type: AWS::Connect::IntegrationAssociation
+    DependsOn: ContactLensConsumerDisAssociationResource
+    Properties:
+      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      IntegrationArn: !Sub "${ContactLensConsumerLambdaArn}:active"
+      IntegrationType: "LAMBDA_FUNCTION"
+    
+  MultiPartyConferenceConfig:
+    Type: Custom::MultiPartyConferenceConfig
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "MULTI_PARTY_CONFERENCE"
+      ResourceValue: "false"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Disable MultiParty Conferencing
+  CreateSFDCAgentState:
+    Condition: UseSourceCondition
+    Type: Custom::CreateSFDCAgentState
+    Properties:
+      InstanceId: !Sub "${ConnectInstanceId}"
+      ResourceType: "CREATE_SFDC_AGENT_STATE"
+      ResourceValue: "sfdc_pending"
+      ServiceToken: !GetAtt ConnectConfiguration.Arn
+      Description: Create sfdc_pending agent state
+  ConnectConfiguration:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: "index.lambda_handler"
+      Runtime: python3.11
+      Timeout: 30
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ConnectConfiguratorLambdaRole}"
+      Code:
+        ZipFile:
+          !Sub |
+            import boto3
+            from botocore.exceptions import ClientError
+            import json
+            import cfnresponse
+            import time
+
+            SUCCESS = "SUCCESS"
+            FAILED = "FAILED"
+            APPROVED_ORIGINS = "APPROVED_ORIGINS"
+            ADD_LAMBDA_FUNCITON = "ADD_LAMBDA_FUNCTION"
+            ADD_S3_BUCKET = "ADD_S3_BUCKET"
+            LIVE_MEDIA_STREAMING = "LIVE_MEDIA_STREAMING"
+            KINESIS_DATA_STREAMING_CTR = "KINESIS_DATA_STREAMING_CTR"
+            KINESIS_DATA_STREAMING_CONTACT_LENS = "KINESIS_DATA_STREAMING_CONTACT_LENS"
+            MULTI_PARTY_CONFERENCE = "MULTI_PARTY_CONFERENCE"
+            DISASSOCIATERESOURCES = "DISASSOCIATE_RESOURCES"
+            DISASSOCIATE_LAMBDA = "DISASSOCIATE_LAMBDA"
+            CREATE_SFDC_AGENT_STATE = "CREATE_SFDC_AGENT_STATE"
+            connect = boto3.client('connect')
+            logger = boto3.client('logs')
+
+            def check_if_the_resources_already_associated(InstanceId,ResourceValue):
+              found = False
+              list=connect.list_approved_origins(InstanceId=InstanceId)
+              if ResourceValue in list['Origins']:
+                found=True
+              while "NextToken" in list and not found:
+                list = connect.list_approved_origins(InstanceId=InstanceId,NextToken=list["NextToken"])  
+                if ResourceValue in list['Origins']:
+                  found=True
+              return found
+              
+            def disassociate_approved_origin(InstanceId,ResourceValue):
+              try:
+                if check_if_the_resources_already_associated(InstanceId,ResourceValue):
+                  resp=connect.disassociate_approved_origin(InstanceId=InstanceId,Origin=ResourceValue)
+                  time.sleep(5)
+                  if check_if_the_resources_already_associated(InstanceId,ResourceValue):
+                    resp=connect.disassociate_approved_origin(InstanceId=InstanceId,Origin=ResourceValue)                
+                return (True, 'Resources disassociated' + ResourceValue)
+              except Exception as e:
+                return (False, "Cannot disassociate Approved Origin: " + str(e))
+            
+            def disassociate_lambda(InstanceId,ResourceValue):
+              try:
+                found = False
+                list=connect.list_lambda_functions(InstanceId=InstanceId,MaxResults=25)
+                functionARNForActive = ResourceValue + ':active'
+                if functionARNForActive in list['LambdaFunctions']:
+                  found = True
+                while "NextToken" in list and not found:
+                  list = connect.list_lambda_functions(InstanceId=InstanceId,MaxResults=25,NextToken=list["NextToken"])
+                  if functionARNForActive in list['LambdaFunctions']:
+                    found = True
+                if found:
+                  resp = connect.disassociate_lambda_function(InstanceId=InstanceId, FunctionArn=functionARNForActive)
+                  return (True, 'Resources disassociated' + ResourceValue)
+                else:
+                  return (True, 'Resources Not Found to disassociate' + ResourceValue)
+              except Exception as e:
+                return (False, "Cannot disassociate lambda resource: " + str(e))
+            def toggle_multiparty_conference(InstanceId, isEnabled):
+              try:
+                resp = connect.update_instance_attribute(InstanceId=InstanceId, AttributeType=MULTI_PARTY_CONFERENCE, Value=isEnabled)
+                return (True, resp['ResponseMetadata']['RequestId'])
+              except Exception as e:
+                return (False, "Cannot Toggle MultiParty Conference: " + str(e))
+            
+
+            def list_instance_storage_configs(InstanceId, ResourceType) :
+              try:
+                resp = connect.list_instance_storage_configs(InstanceId=InstanceId,ResourceType=ResourceType)
+                return (True, resp['StorageConfigs'])
+              except Exception as e:
+                return (False, [])
+
+            def add_S3_Bucket(InstanceId, storageConfig):
+              try:
+                resp, data = list_instance_storage_configs(InstanceId,'CALL_RECORDINGS')
+                if(resp and len(data)==0):
+                  resp = connect.associate_instance_storage_config(InstanceId=InstanceId, ResourceType='CALL_RECORDINGS', StorageConfig=storageConfig)
+                  return (True, resp['ResponseMetadata']['RequestId'])
+                else:
+                  return (True, 'S3 bucket associated')
+              except Exception as e:
+                return (False, "Cannot Attach S3 Bucket: " + str(e))
+                
+            def add_Live_Media_Streaming(InstanceId, storageConfig):
+              try:
+                storageConfig['KinesisVideoStreamConfig']['RetentionPeriodHours'] = 0
+                resp, data = list_instance_storage_configs(InstanceId,'MEDIA_STREAMS')
+                if(resp and len(data)==0):
+                  resp = connect.associate_instance_storage_config(InstanceId=InstanceId, ResourceType='MEDIA_STREAMS', StorageConfig=storageConfig)
+                  return (True, resp['ResponseMetadata']['RequestId'])
+                else:
+                  return (True, 'Live media storage exists')
+              except Exception as e:
+                return (False, "Cannot Configure Live Media Streaming: " + str(e))
+                
+            def add_Data_Streaming(InstanceId, storageConfig, resourceType):
+              try:
+                resp, data = list_instance_storage_configs(InstanceId,resourceType)
+                if(resp and len(data)==0):
+                  resp = connect.associate_instance_storage_config(InstanceId=InstanceId, ResourceType=resourceType, StorageConfig=storageConfig)
+                  return (True, resp['ResponseMetadata']['RequestId'])
+                else:
+                  return (True, 'Data stream associated')
+              except Exception as e:
+                return (False, "Cannot Configure Kinesis Data Streaming: " + str(e))
+            
+            def add_Sfdc_Agent_State(InstanceId, agentStateName):
+              try:
+                  isDone = False
+                  nextToken = None
+                  hasSfdcAgentState = False
+                  while (not(isDone) and not(hasSfdcAgentState)):
+                      if nextToken == None:
+                          response = connect.list_agent_statuses(
+                              InstanceId=InstanceId,
+                              MaxResults=100,
+                              AgentStatusTypes=['CUSTOM']
+                          )
+                      else:
+                          response = connect.list_agent_statuses(
+                              InstanceId=InstanceId,
+                              NextToken=nextToken,
+                              MaxResults=100,
+                              AgentStatusTypes=['CUSTOM']
+                          )
+                      nextToken = response.get('NextToken')
+                      agentStatuses = response.get('AgentStatusSummaryList')
+                      for agentStatus in agentStatuses:
+                          if agentStatus.get('Name') == agentStateName:
+                              hasSfdcAgentState = True
+                              break
+                      isDone = True if nextToken == None else False
+
+                  if not(hasSfdcAgentState):
+                      connect.create_agent_status(
+                          InstanceId=InstanceId,
+                          Name=agentStateName,
+                          Description=agentStateName + ' state',
+                          State='ENABLED'
+                      )
+                      return (True, agentStateName + ' state is created')
+                  else:
+                      return (True, agentStateName + ' state exists')
+              except Exception as e:
+                  return (False, "Cannot create ' + agentStateName + ' agent state: " + str(e))
+            
+            def lambda_handler(event, context):
+              InstanceId = event['ResourceProperties']['InstanceId']
+              ResourceType = event['ResourceProperties']['ResourceType']
+              ResourceValue = event['ResourceProperties']['ResourceValue']
+              if event['RequestType'] == 'Create' or event['RequestType'] == 'Update':
+                if ResourceType == DISASSOCIATERESOURCES:
+                  res, reason = disassociate_approved_origin(InstanceId,ResourceValue)
+                    
+                elif ResourceType == DISASSOCIATE_LAMBDA:
+                  res, reason = disassociate_lambda(InstanceId,ResourceValue)
+                  
+                elif ResourceType == MULTI_PARTY_CONFERENCE:
+                    if event['RequestType'] == 'Create':
+                        res, reason = toggle_multiparty_conference(InstanceId, ResourceValue)
+                    else:
+                        res = True
+                        reason = "MultiPartyConference not upadted on CC Update"
+
+
+                    
+                elif ResourceType == ADD_S3_BUCKET:
+                    res, reason = add_S3_Bucket(InstanceId, ResourceValue)
+                
+                elif ResourceType == LIVE_MEDIA_STREAMING:
+                    res, reason = add_Live_Media_Streaming(InstanceId, ResourceValue)
+                    
+                elif ResourceType == KINESIS_DATA_STREAMING_CTR:
+                    res, reason = add_Data_Streaming(InstanceId, ResourceValue, 'CONTACT_TRACE_RECORDS')
+                
+                elif ResourceType == KINESIS_DATA_STREAMING_CONTACT_LENS:
+                    res, reason = add_Data_Streaming(InstanceId, ResourceValue, 'REAL_TIME_CONTACT_ANALYSIS_SEGMENTS')
+                
+                elif ResourceType == CREATE_SFDC_AGENT_STATE:
+                    res, reason = add_Sfdc_Agent_State(InstanceId, ResourceValue)
+                       
+              elif event['RequestType'] == 'Delete':
+                res = True
+                reason = "Nothing To Delete"
+              else:
+                res = False
+                reason = "Unknown operation: " + event['RequestType']
+              responseData = {}
+              responseData['Reason'] = reason
+              if res:
+                cfnresponse.send(event, context, SUCCESS, responseData, reason)
+              else:
+                cfnresponse.send(event, context, FAILED, responseData, reason)
+      FunctionName: !Sub "${CallCenterApiName}-ConnectConfigurationFunction"
+      Description: It associate the lambda function, approved origins etc to amazon connect
+Metadata:
+  StageName : ServiceVoiceContactCenterProvision
+  Author: Salesforce Service Cloud
+  Description: Service Cloud Voice Contact Center Provisioning Stack For configuring Amazon connect

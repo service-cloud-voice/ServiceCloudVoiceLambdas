@@ -1,0 +1,643 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: |
+  Deploys Service Cloud Voice RealtimeAlert Lambda that sends email based on the configured cloudwatch alarms.
+Metadata:
+  StageName : ServiceVoiceContactCenterRealtimeAlertProvision
+  Author: Salesforce Service Cloud
+  Description: Service Cloud Voice Customer Alert Provisioning Stack.
+
+Parameters:
+  InvokeSalesforceRestApiArn:
+    Description: Arn of the InvokeSalesforceRestApi.
+    Type: String
+  ConnectInstanceId:
+    Description: Amazon connect instance id to monitor.
+    Type: String
+  Version:
+    Description: Version of the Realtime Alert Lambda.
+    Default: V7.0
+    Type: String
+  CallCenterApiName:
+    Description: Call Center ApiName given during the provision UI. This is the prefix used for lambda function naming.
+    Type: String
+  S3BucketForScvResources:
+    Description: The S3 bucket that stores SCV resources, like Lambda functions.
+    Type: String
+  RealtimeAlertRole:
+    Description: Role used for lambda function in RealtimeAlert stack
+    Type: String
+  InvokeTelephonyIntegrationApiFunctionName:
+    Description: InvokeTelephonyIntegrationApi Lambda Function Name.
+    Type: String
+  InvokeSalesforceRestApiFunctionName:
+    Description: InvokeSalesforceRestApiFunctionName Lambda Function Name.
+    Type: String
+  CTRDataSyncFunctionName:
+    Description: CTRDataSyncFunctionName Lambda Function Name.
+    Type: String
+  ContactDataSyncFunctionName:
+    Description: ContactDataSyncFunctionName Lambda Function Name.
+    Type: String
+  kvsConsumerTriggerName:
+    Description: kvsConsumerTriggerName Lambda Function Name.
+    Type: String
+  kvsTranscriberName:
+    Description: kvsTranscriberName Lambda Function Name.
+    Type: String
+  HandleContactEventsFunctionName:
+    Description: HandleContactEventsFunctionName Lambda Function Name.
+    Type: String
+  ContactLensConsumerFunctionName:
+    Description: ContactLensConsumerFunction Lambda Function Name.
+    Type: String
+  VoiceMailAudioProcessingFunctionName:
+    Description: VoiceMailAudioProcessing Lambda Function Name.
+    Type: String
+  VoiceMailPackagingFunctionName:
+    Description: VoiceMailPackaging Lambda Function Name.
+    Type: String
+  VoiceMailTranscribeFunctionName:
+    Description: voiceMailTranscribe Lambda Function Name.
+    Type: String
+  SalesforceRelease:
+    Type: String
+    Description: Salesforce Major Release Version
+  InstanceType:
+    Description: Connect Instance type.
+    Default: SOURCE
+    Type: String
+    AllowedValues:
+      - SOURCE
+      - REPLICA
+      - MULTIORG
+
+Conditions:
+  UseSourceCondition: !Or
+    - !Equals [ !Ref InstanceType, "SOURCE" ]
+    - !Equals [ !Ref InstanceType, "MULTIORG" ]
+Resources:
+
+  RealtimeAlertLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/realtimeAlert${Version}"
+      Environment:
+        Variables:
+          INVOKE_SALESFORCE_REST_API_ARN: !Sub "${InvokeSalesforceRestApiArn}"
+          CONNECT_INSTANCE_ID: !Sub "${ConnectInstanceId}"
+          LOG_LEVEL: "info"
+
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "${RealtimeAlertRole}"
+      Timeout: 15
+      Runtime: nodejs20.x
+      FunctionName: !Sub "${CallCenterApiName}-RealtimeAlert"
+      Layers:
+        - !Ref RealtimeAlertLayer
+      Events:
+        SNSEvent:
+          Type: SNS
+          Properties:
+            Topic: !Ref RealtimeAlertAlarmSnsTopic
+      Description: This Lambda publishes the RealtimeAlertEvent platform event using the Salesforce REST API. This function is called by CloudWatch alarms in your Amazon Connect instance. You don’t need to call this function manually.
+
+  RealtimeAlertLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: RealtimeAlertFunctionLayer
+      Description: Realtime alert Function layer
+      ContentUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/realtimeAlertFunctionLayer${Version}"
+      CompatibleRuntimes:
+        - nodejs20.x
+    Metadata:
+      BuildMethod: nodejs20.x
+
+  RealtimeAlertAlarmSnsTopic:
+    Type: AWS::SNS::Topic
+    DependsOn:
+      - RealtimeAlertLambda
+    Properties:
+      TopicName:
+        !Sub "${CallCenterApiName}-RealtimeAlertTopic"
+      Subscription:
+        - Protocol: lambda
+          Endpoint: !GetAtt RealtimeAlertLambda.Arn
+
+  RealtimeAlertLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref RealtimeAlertLambda.Alias
+      Principal: sns.amazonaws.com
+
+  RealtimeAlertAlarmSnsTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: "sns:Publish"
+            Resource: !Ref RealtimeAlertAlarmSnsTopic
+            Principal:
+              Service:
+                - cloudwatch.amazonaws.com
+            Condition:
+              ArnLike:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:*:*:${AWS::AccountId}:*'
+
+  ConcurrentCallsPercentageAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Connect ${CallCenterApiName}-ConcurrentCallsPercentage"
+      AlarmDescription: !Sub "The number of concurrent active voice calls in the connect instance during the evaluation period was greater than threshold."
+      Namespace: AWS/Connect
+      MetricName: ConcurrentCallsPercentage
+      Statistic: Maximum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 0.8
+      EvaluationPeriods: 10
+      Dimensions:
+        - Name: InstanceId
+          Value: !Ref ConnectInstanceId
+        - Name: MetricGroup
+          Value: VoiceCalls
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+
+  CTRDataSyncFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${CTRDataSyncFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${CTRDataSyncFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CTRDataSyncFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  CTRDataSyncFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${CTRDataSyncFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${CTRDataSyncFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CTRDataSyncFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  ContactDataSyncFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${ContactDataSyncFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${ContactDataSyncFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactDataSyncFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  ContactDataSyncFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${ContactDataSyncFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${ContactDataSyncFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactDataSyncFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  InvokeTelephonyIntegrationApiFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${InvokeTelephonyIntegrationApiFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${InvokeTelephonyIntegrationApiFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeTelephonyIntegrationApiFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  InvokeTelephonyIntegrationApiFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${InvokeTelephonyIntegrationApiFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${InvokeTelephonyIntegrationApiFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeTelephonyIntegrationApiFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  kvsConsumerTriggerErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsConsumerTriggerName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${kvsConsumerTriggerName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsConsumerTriggerName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  kvsConsumerTriggerThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsConsumerTriggerName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${kvsConsumerTriggerName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsConsumerTriggerName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  kvsTranscriberErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsTranscriberName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${kvsTranscriberName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsTranscriberName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  kvsTranscriberThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${kvsTranscriberName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${kvsTranscriberName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref kvsTranscriberName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  InvokeSalesforceRestApiFunctionFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${InvokeSalesforceRestApiFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${InvokeSalesforceRestApiFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeSalesforceRestApiFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  InvokeSalesforceRestApiFunctionThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${InvokeSalesforceRestApiFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${InvokeSalesforceRestApiFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref InvokeSalesforceRestApiFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  HandleContactEventsFunctionNameFunctionErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${HandleContactEventsFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${HandleContactEventsFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HandleContactEventsFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  HandleContactEventsFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${HandleContactEventsFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${HandleContactEventsFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref HandleContactEventsFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  ContactLensConsumerFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${ContactLensConsumerFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${ContactLensConsumerFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactLensConsumerFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+  ContactLensConsumerFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${ContactLensConsumerFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${ContactLensConsumerFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ContactLensConsumerFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailAudioProcessingFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${VoiceMailAudioProcessingFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${VoiceMailAudioProcessingFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailAudioProcessingFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailAudioProcessingFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${VoiceMailAudioProcessingFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${VoiceMailAudioProcessingFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailAudioProcessingFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailPackagingFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${VoiceMailPackagingFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${VoiceMailPackagingFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailPackagingFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailPackagingFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${VoiceMailPackagingFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${VoiceMailPackagingFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailPackagingFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailTranscribeFunctionNameErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "SCV Lambda ${VoiceMailTranscribeFunctionName} Errors"
+      AlarmDescription: !Sub "The number of invocations of ${VoiceMailTranscribeFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 3
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailTranscribeFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  VoiceMailTranscribeFunctionNameThrottlesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      ActionsEnabled: false
+      AlarmName: !Sub "SCV Lambda ${VoiceMailTranscribeFunctionName} Throttles"
+      AlarmDescription: !Sub "The number of invocation requests of ${VoiceMailTranscribeFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Statistic: Sum
+      Unit: Count
+      AlarmActions:
+        - !Ref RealtimeAlertAlarmSnsTopic
+      Period: 60
+      Threshold: 5
+      EvaluationPeriods: 1
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref VoiceMailTranscribeFunctionName
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: "notBreaching"
+
+  ServiceCloudVoiceLambdaDashboard:
+    Type: "AWS::CloudWatch::Dashboard"
+    Properties:
+      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunctionName}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunctionName}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunctionName}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriberName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriberName}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTriggerName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTriggerName}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunctionName}"}},{"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunctionName}"}},{"type": "metric","x": 6,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailAudioProcessingFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailAudioProcessingFunctionName}"}},{"type": "metric","x": 12,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailPackagingFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailPackagingFunctionName}"}},{"type": "metric","x": 0,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailTranscribeFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailTranscribeFunctionName}"}}, {"type": "metric","x": 6,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactDataSyncFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactDataSyncFunctionName}"}}]}'
+      DashboardName: !If [UseSourceCondition, !Sub '${CallCenterApiName}-ServiceCloudVoiceLambdaDashboard',!Sub '${CallCenterApiName}-Replica-ServiceCloudVoiceLambdaDashboard']
+  ServiceCloudVoiceConnectDashboard:
+    Type: "AWS::CloudWatch::Dashboard"
+    Properties:
+      DashboardBody: !Sub '{"widgets":[{"type":"metric","x":0,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ToInstancePacketLossRate","Participant","Agent","Type of Connection","WebRTC","Instance ID","${ConnectInstanceId}","Stream Type","Voice"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ToInstancePacketLossRate"}},{"type":"metric","x":6,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallsBreachingConcurrencyQuota","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallsBreachingConcurrencyQuota"}},{"type":"metric","x":0,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","MissedCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"MissedCalls"}},{"type":"metric","x":6,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","MisconfiguredPhoneNumbers","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"MisconfiguredPhoneNumbers"}},{"type":"metric","x":6,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ThrottledCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ThrottledCalls"}},{"type":"metric","x":0,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallRecordingUploadError","InstanceId","${ConnectInstanceId}","MetricGroup","CallRecordings"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallRecordingUploadError"}},{"type":"metric","x":12,"y":0,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","CallsPerInterval","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"CallsPerInterval"}},{"type":"metric","x":12,"y":6,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ConcurrentCalls","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ConcurrentCalls"}},{"type":"metric","x":12,"y":12,"width":6,"height":6,"properties":{"metrics":[["AWS/Connect","ConcurrentCallsPercentage","InstanceId","${ConnectInstanceId}","MetricGroup","VoiceCalls"]],"view":"timeSeries","stacked":false,"region":"${AWS::Region}","stat":"Sum","period":300,"title":"ConcurrentCallsPercentage"}}]}'
+      DashboardName: !If [UseSourceCondition,!Sub '${CallCenterApiName}-ServiceCloudVoiceConnectDashboard',!Sub '${CallCenterApiName}-Replica-ServiceCloudVoiceConnectDashboard']
+
+Outputs:
+  ServiceCloudVoiceLambdaDashboard:
+    Description: SCV Lambda dashboards output ARN
+    Value: !Ref ServiceCloudVoiceLambdaDashboard
+  ServiceCloudVoiceConnectDashboard:
+    Description: SCV Connect dashboards output ARN
+    Value: !Ref ServiceCloudVoiceConnectDashboard
