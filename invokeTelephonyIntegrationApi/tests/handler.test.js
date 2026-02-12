@@ -322,6 +322,7 @@ describe("handler.js", () => {
               methodName: "executeOmniFlow",
               flowDevName: "TestFlow",
               fallbackQueue: "TestQueue",
+              transferTarget: "TestTransferTarget",
               fieldValues: {
                 dialedNumber: "123-456-7890",
               },
@@ -343,6 +344,7 @@ describe("handler.js", () => {
         expect(api.executeOmniFlow).toHaveBeenCalledWith("test-contact-id", {
           flowDevName: "TestFlow",
           fallbackQueue: "TestQueue",
+          transferTarget: "TestTransferTarget",
           dialedNumber: "123-456-7890",
           flowInputParameters: mockFlowInputParams,
         }, mockSecretConfig);
@@ -471,6 +473,406 @@ describe("handler.js", () => {
           callbackNumber: "123-456-7890",
         }, mockSecretConfig);
         expect(result).toEqual({ callbackId: "callback-id" });
+      });
+    });
+
+    describe("routeVoiceCall", () => {
+      it("should route voice call with routingTarget and fallbackQueue", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "AGENT-123",
+              fallbackQueue: "QUEUE-456",
+              "flowInput-param1": "value1",
+              "flowInput-param2": "value2",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockFlowInputParams = { param1: "value1", param2: "value2" };
+        utils.constructFlowInputParams.mockReturnValue(mockFlowInputParams);
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(utils.constructFlowInputParams).toHaveBeenCalledWith(
+          event.Details.Parameters
+        );
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "AGENT-123",
+          fallbackQueue: "QUEUE-456",
+          flowInputParameters: mockFlowInputParams,
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with only routingTarget", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "QUEUE-789",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "QUEUE-789",
+          fallbackQueue: undefined,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with routingTarget to Flow", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "Flow.Example_Flow",
+              "flowInput-customerSegment": "VIP",
+              "flowInput-priority": "High",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockFlowInputParams = { customerSegment: "VIP", priority: "High" };
+        utils.constructFlowInputParams.mockReturnValue(mockFlowInputParams);
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "Flow.Example_Flow",
+          fallbackQueue: undefined,
+          flowInputParameters: mockFlowInputParams,
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should handle error when routing voice call", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "INVALID-TARGET",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockRejectedValue(new Error("Error routing voice call"));
+        
+        await expect(handler.handler(event)).rejects.toThrow("Error routing voice call");
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "INVALID-TARGET",
+          fallbackQueue: undefined,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+      });
+
+      it("should use provided contactId from parameters", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "AGENT-123",
+              contactId: "custom-contact-id",
+            },
+            ContactData: {
+              ContactId: "original-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("custom-contact-id", {
+          routingTarget: "AGENT-123",
+          fallbackQueue: undefined,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+      });
+
+      it("should route voice call with empty fallbackQueue", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "QUEUE-123",
+              fallbackQueue: "",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "QUEUE-123",
+          fallbackQueue: "",
+          flowInputParameters: {},
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with null fallbackQueue", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "AGENT-456",
+              fallbackQueue: null,
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "AGENT-456",
+          fallbackQueue: null,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with multiple flowInput parameters", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "Flow.Example_Flow",
+              "flowInput-param1": "value1",
+              "flowInput-param2": "value2",
+              "flowInput-param3": "value3",
+              "flowInput-customerSegment": "VIP",
+              "flowInput-priority": "High",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockFlowInputParams = {
+          param1: "value1",
+          param2: "value2",
+          param3: "value3",
+          customerSegment: "VIP",
+          priority: "High"
+        };
+        utils.constructFlowInputParams.mockReturnValue(mockFlowInputParams);
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(utils.constructFlowInputParams).toHaveBeenCalledWith(
+          event.Details.Parameters
+        );
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "Flow.Example_Flow",
+          fallbackQueue: undefined,
+          flowInputParameters: mockFlowInputParams,
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with Agent ID format", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "005XX000000XXXXXAAA",
+              fallbackQueue: "00GXX000000XXXXXAAA",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "005XX000000XXXXXAAA",
+          fallbackQueue: "00GXX000000XXXXXAAA",
+          flowInputParameters: {},
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with Queue ID format", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "00GXX000000XXXXXAAA",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "00GXX000000XXXXXAAA",
+          fallbackQueue: undefined,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call with Flow ID format", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "Flow.MyCustomFlow",
+              "flowInput-input1": "test-value",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockFlowInputParams = { input1: "test-value" };
+        utils.constructFlowInputParams.mockReturnValue(mockFlowInputParams);
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "Flow.MyCustomFlow",
+          fallbackQueue: undefined,
+          flowInputParameters: mockFlowInputParams,
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should handle routeVoiceCall error and propagate it", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "INVALID-TARGET",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockError = new Error("Network timeout");
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockRejectedValue(mockError);
+        
+        await expect(handler.handler(event)).rejects.toThrow("Network timeout");
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "INVALID-TARGET",
+          fallbackQueue: undefined,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+      });
+
+      it("should route voice call with all optional parameters", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "AGENT-123",
+              fallbackQueue: "QUEUE-456",
+              "flowInput-param1": "value1",
+              "flowInput-param2": "value2",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockFlowInputParams = { param1: "value1", param2: "value2" };
+        utils.constructFlowInputParams.mockReturnValue(mockFlowInputParams);
+        api.routeVoiceCall.mockResolvedValue({ status: "Success", message: "Routed successfully" });
+        const result = await handler.handler(event);
+        expect(utils.constructFlowInputParams).toHaveBeenCalledWith(
+          event.Details.Parameters
+        );
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("test-contact-id", {
+          routingTarget: "AGENT-123",
+          fallbackQueue: "QUEUE-456",
+          flowInputParameters: mockFlowInputParams,
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success", message: "Routed successfully" });
+      });
+
+      it("should route voice call with SObject ID as contactId", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "QUEUE-123",
+              contactId: "00aXX000000XXXXXAAA",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue({ status: "Success" });
+        const result = await handler.handler(event);
+        expect(api.routeVoiceCall).toHaveBeenCalledWith("00aXX000000XXXXXAAA", {
+          routingTarget: "QUEUE-123",
+          fallbackQueue: undefined,
+          flowInputParameters: {},
+        }, mockSecretConfig);
+        expect(result).toEqual({ status: "Success" });
+      });
+
+      it("should route voice call and log response correctly", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "routeVoiceCall",
+              routingTarget: "AGENT-123",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockResponse = { status: "Success" };
+        utils.constructFlowInputParams.mockReturnValue({});
+        api.routeVoiceCall.mockResolvedValue(mockResponse);
+        await handler.handler(event);
+        expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+          message: "Response received from TelephonyService with test-contact-id",
+          context: { contactId: "test-contact-id", payload: mockResponse },
+        });
       });
     });
 

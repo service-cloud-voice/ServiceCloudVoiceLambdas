@@ -35,7 +35,7 @@ Resources:
   ProviderCreator:
     Type: AWS::Lambda::Function
     Properties:
-      Runtime: python3.11
+      Runtime: python3.13
       Handler: index.lambda_handler
       MemorySize: 128
       Role: !Sub  arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVIDPLambdaRole

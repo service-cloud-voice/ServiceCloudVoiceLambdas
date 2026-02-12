@@ -137,6 +137,9 @@ Outputs:
     Description: S3 Bucket Role Resource
     Condition: UseSourceCondition
     Value: !GetAtt SCVS3RoleResource.Arn
+  SCVTenantBucketWriteAccessRoleResource:
+    Description: IAM Role ARN for putting voicemail messages to tenant resources S3 bucket
+    Value: !GetAtt SCVTenantBucketWriteAccessRoleResource.Arn
   ContactLensConsumerFunction:
     Description: ContactLensConsumer Lambda Function ARN
     Value: !GetAtt ContactLensConsumerFunction.Arn
@@ -238,6 +241,19 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub "${S3BucketForTenantResources}-${AWS::AccountId}"
+      CorsConfiguration:
+        CorsRules:
+          - AllowedOrigins:
+              - !Ref LightningDomainUrl
+            AllowedMethods:
+              - PUT
+            AllowedHeaders:
+              - Content-Type
+            ExposedHeaders:
+              - ETag
+              - x-amz-request-id
+              - x-amz-id-2
+            MaxAge: 300
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -280,7 +296,14 @@ Resources:
                 - transcribe.amazonaws.com
             Resource:
               - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}'
-
+          - Action:
+              - s3:*
+            Effect: Allow
+            Principal:
+              Service:
+                - connect.amazonaws.com
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/voicemailmessages/*'
   CTRDataSyncFunctionStream:
     Type: AWS::Lambda::EventSourceMapping
     Properties:
@@ -680,7 +703,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: "index.lambda_handler"
-      Runtime: python3.11
+      Runtime: python3.13
       Timeout: 30
       Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVSSMLambdaExecutionRole"
       Code:
@@ -723,6 +746,8 @@ Resources:
               try:
                 resp = ssm.delete_parameter(Name=name)
                 return (True, "SSM Secure String with Name " + name + " deleted")
+              except ssm.exceptions.ParameterNotFound:
+                return (True, "SSM Secure String with Name " + name + " does not exist")
               except Exception as e:
                 return (False, "Cannot delete Secure String: " + str(e))
 
@@ -731,11 +756,9 @@ Resources:
               ssm_value = event['ResourceProperties']['Create']['ParamValue']
               ssm_arn = ""
 
-              if event['RequestType'] == 'Create':
-                res, ssm_arn = create_ssm(ssm_name, ssm_value)
-                reason = "Creation succeeded"
-              elif event['RequestType'] == 'Update':
-                res, reason = update_ssm(ssm_name, ssm_value)
+              if event['RequestType'] in ['Create', 'Update']:
+                res = True
+                reason = "SSM parameter operation skipped"
               elif event['RequestType'] == 'Delete':
                 res, reason = delete_ssm(ssm_name)
               else:
@@ -820,6 +843,44 @@ Resources:
             Version: "2012-10-17"
           PolicyName: !Sub "${CallCenterApiName}-ConnectCallPoly"
       RoleName: !Sub "${CallCenterApiName}-ConnectCallRole"
+
+  SCVTenantBucketWriteAccessRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: "sts:AssumeRole"
+            Effect: "Allow"
+            Principal:
+              AWS:
+                !Join
+                  - ""
+                  - - "arn:"
+                    - !Ref "AWS::Partition"
+                    - ":iam::"
+                    - !Ref MpaId
+                    - ":root"
+        Version: "2012-10-17"
+      Policies:
+        - PolicyDocument:
+            Statement:
+              - Action:
+                  - "s3:PutObject"
+                  - "s3:PutObjectTagging"
+                  - "s3:GetObject"
+                  - "s3:ListBucket"
+                Effect: "Allow"
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/voicemailmessages/*"
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/voicemailmessages/*"
+                Sid: "VoicemailMessagesPutAccessSid"
+            Version: "2012-10-17"
+          PolicyName: !Sub "${CallCenterApiName}-SCVTenantBucketWriteAccessPolicy"
+      RoleName: !Sub "${CallCenterApiName}-SCVTenantBucketWriteAccessRole"
+      Description: IAM role for putting voicemail messages to tenant resources S3 bucket
+
   SCVS3RoleResource:
     Condition: UseSourceCondition
     Type: "AWS::IAM::Role"
@@ -1014,8 +1075,8 @@ Resources:
       FunctionName: !If [LambdaPrefixIsNull, !Sub "${CallCenterApiName}-PostCallAnalysisTriggerFunction", !Sub "${LambdaPrefix}-PostCallAnalysisTriggerFunction"]
       Layers:
         - Ref: PostCallAnalysisTriggerFunctionLayer
-      Description: This lambda function gets invoked when the call is done.
-
+      Description: This lambda function gets invoked when the call is done. 
+  
   PostCallAnalysisTriggerFunctionAsyncConfig:
     Type: AWS::Lambda::EventInvokeConfig
     Properties:

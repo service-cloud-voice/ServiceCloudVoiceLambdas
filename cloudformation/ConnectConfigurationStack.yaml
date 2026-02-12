@@ -241,7 +241,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       Handler: "index.lambda_handler"
-      Runtime: python3.11
+      Runtime: python3.13
       Timeout: 30
       Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ConnectConfiguratorLambdaRole}"
       Code:

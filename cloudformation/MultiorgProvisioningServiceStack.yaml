@@ -900,7 +900,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${lambdaPrefix}-S3SecretCacheTTL"
-      Runtime: python3.11
+      Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt S3SecretCacheTTLRole.Arn
       Timeout: 60

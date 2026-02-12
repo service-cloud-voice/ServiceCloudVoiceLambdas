@@ -46,7 +46,7 @@ Parameters:
 
 Conditions:
   Multiorg:
-    !Equals [ !Ref Multiorg, 'TRUE' ]
+    !Equals [ !Ref Multiorg, 'true' ]
 
 Outputs:
   VoiceMailAudioProcessingFunction:
@@ -89,10 +89,7 @@ Resources:
         - nodejs22.x
       Content:
         S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
-        S3Key: !If
-          - Multiorg
-          - !Sub '${SalesforceRelease}/multiorgVoiceMailPackagingFunctionLayer${Version}'
-          - !Sub '${SalesforceRelease}/voiceMailPackagingFunctionLayer${Version}'
+        S3Key: !Sub '${SalesforceRelease}/voiceMailPackagingFunctionLayer${Version}'
       Description: voiceMailAudioProcessing node modules
       LayerName: VoiceMailPackagingFunctionLayer
 

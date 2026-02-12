@@ -6,12 +6,12 @@ Parameters:
     Type: String
     Default: ""
     Description: Salesforce Existing CallCenter API name
-
+  
   lambdaPrefix:
     Type: String
     Default: scvMultiorg
     Description: Prefix for Lambda function names
-
+  
   ConnectInstanceId:
     Type: String
     Description: Amazon Connect Instance ID
@@ -50,18 +50,18 @@ Resources:
                 Action:
                   - connect:ListInstanceStorageConfigs
                 Resource: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/*"
-
+              
               - Effect: Allow
                 Action:
                   - lambda:ListEventSourceMappings
                 Resource: "*"
-
+              
               - Effect: Allow
                 Action:
                   - lambda:UpdateEventSourceMapping
                   - lambda:GetEventSourceMapping
                 Resource: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:event-source-mapping:*"
-
+              
               - Effect: Allow
                 Action:
                   - events:ListRules
@@ -75,10 +75,8 @@ Resources:
                 Resource:
                   - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*ContactEventsRule"
                   - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*ScheduledRule"
-                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*VoiceMailAudioProcessingFunction*"
-                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*VoiceMailTranscribeFunction*"
-                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*VoiceMailPackagingFunction*"
-
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*VoiceMail*"
+              
               - Effect: Allow
                 Action:
                   - lambda:GetFunction
@@ -90,10 +88,13 @@ Resources:
     Properties:
       FunctionName: !Sub "${lambdaPrefix}-EnterpriseEventManagement"
       Description: "Disables conflicting single-org event sources during multiorg migration"
-      Runtime: python3.11
+      Runtime: python3.13
       Handler: index.handler
       Role: !GetAtt MultiorgMigrationRole.Arn
       Timeout: 300
+      Environment:
+        Variables:
+          LOG_LEVEL: INFO
       Code:
         ZipFile: |
           import boto3
@@ -105,7 +106,8 @@ Resources:
 
           # Configure logging
           logger = logging.getLogger()
-          logger.setLevel(logging.INFO)
+          log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+          logger.setLevel(getattr(logging, log_level, logging.INFO))
 
           # AWS clients
           lambda_client = boto3.client('lambda')
@@ -118,7 +120,7 @@ Resources:
               Disables conflicting single-org event sources without creating new ones
               """
               error_log = []
-          
+              
               try:
                   request_param = event['ResourceProperties']
 
@@ -212,7 +214,8 @@ Resources:
                       result['s3_eventbridge_migration'] = disable_s3_eventbridge_rules(
                           lambda_prefix,
                           discovered_streams.get('s3_bucket_name'),
-                          error_log
+                          error_log,
+                          existing_call_center_api_name
                       )
                   except Exception as e:
                       error_msg = f"S3 EventBridge migration failed: {str(e)}"
@@ -234,13 +237,13 @@ Resources:
                   # Send CloudFormation response
                   if 'ResourceProperties' in event:
                       send_cfn_response(event, context, 'SUCCESS', result)
-          
+                  
                   return result
 
               except Exception as e:
                   error_msg = f"Critical migration failure: {str(e)}"
                   logger.error(error_msg, exc_info=True)
-          
+                  
                   # Even for critical failures, return SUCCESS to prevent stack failure
                   logger.error("=== CRITICAL ERROR - MANUAL INTERVENTION REQUIRED ===")
                   logger.error("MANUAL ACTION: Check CloudWatch logs for detailed error information")
@@ -259,7 +262,7 @@ Resources:
                               'Check EventBridge rules and event source mappings manually'
                           ]
                       })
-          
+                  
                   logger.info("=== MIGRATION FUNCTION COMPLETED (WITH CRITICAL ERROR) ===")
                   return {'status': 'critical_error', 'message': error_msg, 'requires_manual_intervention': True}
 
@@ -274,7 +277,7 @@ Resources:
                       'status': 'success',
                       'warnings': []
                   }
-          
+                  
                   # Discover CTR stream
                   try:
                       ctr_paginator = connect_client.get_paginator('list_instance_storage_configs')
@@ -290,16 +293,16 @@ Resources:
                                       result['ctr_stream_arn'] = stream_arn
                                       logger.info(f"Discovered CTR stream: {stream_arn}")
                                       break
-          
+                      
                       if not result['ctr_stream_arn']:
                           result['warnings'].append("No CTR stream found in Connect instance")
                           logger.warning("No CTR stream found in Connect instance")
-          
+                          
                   except Exception as e:
                       error_msg = f"Error discovering CTR stream: {str(e)}"
                       result['warnings'].append(error_msg)
                       logger.warning(error_msg)
-          
+                  
                   # Discover Contact Lens stream
                   try:
                       cl_paginator = connect_client.get_paginator('list_instance_storage_configs')
@@ -314,16 +317,16 @@ Resources:
                                   if stream_arn:
                                       result['contact_lens_stream_arn'] = stream_arn
                                       break
-          
+                      
                       if not result['contact_lens_stream_arn']:
                           result['warnings'].append("No Contact Lens stream found in Connect instance")
                           logger.warning("No Contact Lens stream found in Connect instance")
-          
+                          
                   except Exception as e:
                       error_msg = f"Error discovering Contact Lens stream: {str(e)}"
                       result['warnings'].append(error_msg)
                       logger.warning(error_msg)
-          
+                  
                   # Discover S3 bucket for call recordings
                   try:
                       s3_paginator = connect_client.get_paginator('list_instance_storage_configs')
@@ -339,18 +342,18 @@ Resources:
                                       result['s3_bucket_name'] = bucket_name
                                       logger.info(f"Discovered S3 bucket: {bucket_name}")
                                       break
-          
+                      
                       if not result['s3_bucket_name']:
                           result['warnings'].append("No S3 bucket found for call recordings in Connect instance")
                           logger.warning("No S3 bucket found for call recordings in Connect instance")
-          
+                          
                   except Exception as e:
                       error_msg = f"Error discovering S3 bucket: {str(e)}"
                       result['warnings'].append(error_msg)
                       logger.warning(error_msg)
-          
+                  
                   return result
-          
+                  
               except Exception as e:
                   error_msg = f"Error discovering Connect streams: {str(e)}"
                   logger.warning(error_msg)
@@ -369,26 +372,26 @@ Resources:
               try:
                   if not stream_arn:
                       return {'skipped': f'No {stream_type} stream ARN found'}
-          
+                  
                   result = {
                       'disabled_mappings': [],
                       'kept_mappings': []
                   }
-          
+                  
                   logger.debug(f"Getting event source mappings for {stream_type} stream: {stream_arn}")
                   paginator = lambda_client.get_paginator('list_event_source_mappings')
                   existing_mappings = []
-          
+                  
                   for page in paginator.paginate(EventSourceArn=stream_arn):
                       existing_mappings.extend(page.get('EventSourceMappings', []))
-          
+                  
                   logger.info(f"Found {len(existing_mappings)} event source mappings for {stream_type} stream")
-          
+                  
                   for mapping in existing_mappings:
                       function_arn = mapping.get('FunctionArn', '')
                       uuid = mapping.get('UUID', '')
                       state = mapping.get('State', '')
-          
+                      
                       # Check if this is the current/correct multiorg function that should be kept
                       if is_current_multiorg_function(function_arn, lambda_prefix):
                           logger.debug(f"Keeping current multiorg function: {function_arn}")
@@ -399,7 +402,7 @@ Resources:
                               'reason': 'current_multiorg_function'
                           })
                           continue
-          
+                      
                       # Check if it's any SCV-related function (single-org OR old multiorg) that should be disabled
                       if is_scv_function(function_arn):
                           if state == 'Enabled':
@@ -434,18 +437,18 @@ Resources:
                               'action': 'kept_customer_function',
                               'reason': 'customer_function'
                           })
-          
+                  
                   # Summary
                   disabled_count = len([m for m in result['disabled_mappings'] if m['action'] == 'disabled'])
                   kept_customer_count = len([m for m in result['kept_mappings'] if 'customer_function' in m.get('reason', '')])
-          
+                  
                   logger.info(f"{stream_type} migration summary:")
                   logger.info(f"  - Disabled old SCV mappings: {disabled_count}")
                   logger.info(f"  - Kept customer mappings: {kept_customer_count}")
                   logger.info(f"  - Kept current multiorg mappings: {len([m for m in result['kept_mappings'] if 'multiorg' in m.get('reason', '')])}")
-          
+                  
                   return result
-          
+                  
               except Exception as e:
                   error_msg = f"Error processing {stream_type} stream event source mappings: {str(e)}"
                   logger.warning(error_msg)
@@ -463,31 +466,31 @@ Resources:
                       'disabled_rules': [],
                       'kept_rules': []
                   }
-          
+                  
                   # Check common rule patterns and disable if conflicting
                   rule_patterns_to_check = [
                       f"{existing_call_center_api_name}-ContactEventsRule",
                       f"{existing_call_center_api_name}-ScheduledRule"
                   ]
-          
+                  
                   # Check specific rule patterns first
                   for rule_name in rule_patterns_to_check:
                       disable_result = disable_rule_if_conflicting(rule_name, lambda_prefix)
                       if disable_result:
                           result['disabled_rules'].append(disable_result)
-          
+                  
                   # Check for SCV rules
                   paginator = events_client.get_paginator('list_rules')
                   for page in paginator.paginate():
                       for rule in page.get('Rules', []):
                           rule_name = rule.get('Name', '')
                           if is_scv_rule(rule_name):
-                              disable_result = disable_rule_if_conflicting(rule_name, lambda_prefix)
+                              disable_result = disable_rule_if_conflicting(rule_name, lambda_prefix, existing_call_center_api_name)
                               if disable_result:
                                   result['disabled_rules'].append(disable_result)
-          
+                  
                   return result
-          
+                  
               except Exception as e:
                   error_msg = f"Error disabling EventBridge rules: {str(e)}"
                   logger.warning(error_msg)
@@ -498,28 +501,39 @@ Resources:
                   })
                   return {'error': error_msg}
 
-          def disable_s3_eventbridge_rules(lambda_prefix: str, s3_bucket_name: str, error_log: List[Dict[str, str]]) -> Dict[str, Any]:
+          def disable_s3_eventbridge_rules(lambda_prefix: str, s3_bucket_name: str, error_log: List[Dict[str, str]], existing_call_center_api_name: str = '') -> Dict[str, Any]:
               """Disable conflicting S3 EventBridge rules for voicemail processing"""
               try:
                   result = {
                       'disabled_rules': [],
                       'kept_rules': []
                   }
-          
+                  
+                  # Check if we have a bucket name to filter by
+                  if not s3_bucket_name:
+                      logger.warning("No S3 bucket name provided, skipping S3 EventBridge rule migration")
+                      return {
+                          'disabled_rules': [],
+                          'kept_rules': [],
+                          'skipped': 'No S3 bucket name provided'
+                      }
+                  
+                  logger.info(f"Processing S3 EventBridge rules for bucket: {s3_bucket_name}")
+                  
                   # Get all EventBridge rules
                   paginator = events_client.get_paginator('list_rules')
                   for page in paginator.paginate():
                       for rule in page.get('Rules', []):
                           rule_name = rule.get('Name', '')
-          
+                          
                           try:
                               # Get rule details to check EventPattern
                               rule_details = events_client.describe_rule(Name=rule_name)
                               event_pattern = rule_details.get('EventPattern')
-          
+                              
                               if not event_pattern:
                                   continue
-          
+                              
                               # Parse EventPattern (could be string or dict)
                               if isinstance(event_pattern, str):
                                   try:
@@ -528,36 +542,38 @@ Resources:
                                       continue
                               else:
                                   pattern_obj = event_pattern
-          
-                              # Check for S3 voicemail rules
+                              
+                              # Check for S3 voicemail rules specific to our bucket
                               if is_s3_voicemail_rule(pattern_obj, s3_bucket_name):
-                                  logger.debug(f"Found S3 voicemail rule: {rule_name}")
-          
+                                  logger.debug(f"Found S3 voicemail rule for bucket {s3_bucket_name}: {rule_name}")
+                                  
                                   # Check if this rule should be kept (matches current lambda prefix)
                                   if should_keep_s3_rule(rule_name, lambda_prefix):
                                       logger.debug(f"Keeping current multiorg S3 rule: {rule_name}")
                                       result['kept_rules'].append({
                                           'rule_name': rule_name,
                                           'action': 'kept_current_multiorg',
-                                          'reason': 'current_multiorg_s3_rule'
+                                          'reason': 'current_multiorg_s3_rule',
+                                          'bucket': s3_bucket_name
                                       })
                                   else:
                                       # Disable the rule
-                                      disable_result = disable_rule_if_conflicting(rule_name, lambda_prefix)
+                                      disable_result = disable_rule_if_conflicting(rule_name, lambda_prefix, existing_call_center_api_name)
                                       if disable_result:
+                                          disable_result['bucket'] = s3_bucket_name
                                           result['disabled_rules'].append(disable_result)
-                                          logger.info(f"Disabled old S3 voicemail rule: {rule_name}")
-          
+                                          logger.info(f"Disabled old S3 voicemail rule for bucket {s3_bucket_name}: {rule_name}")
+                                      
                           except Exception as e:
                               logger.debug(f"Error checking rule {rule_name}: {str(e)}")
                               continue
-          
+                  
                   disabled_count = len(result['disabled_rules'])
                   kept_count = len(result['kept_rules'])
-                  logger.info(f"S3 EventBridge migration summary: disabled {disabled_count}, kept {kept_count} rules")
-          
+                  logger.info(f"S3 EventBridge migration summary for bucket {s3_bucket_name}: disabled {disabled_count}, kept {kept_count} rules")
+                  
                   return result
-          
+                  
               except Exception as e:
                   error_msg = f"Error disabling S3 EventBridge rules: {str(e)}"
                   logger.warning(error_msg)
@@ -569,37 +585,54 @@ Resources:
                   return {'error': error_msg}
 
           def is_s3_voicemail_rule(pattern_obj: Dict, s3_bucket_name: str = None) -> bool:
-              """Check if EventPattern is for S3 voicemail events"""
+              """Check if EventPattern is for S3 voicemail events from the specific bucket"""
               try:
                   # Check for S3 source
                   if 'aws.s3' not in pattern_obj.get('source', []):
                       return False
-          
+                  
                   # Check for Object Created detail-type
                   detail_types = pattern_obj.get('detail-type', [])
                   if 'Object Created' not in detail_types:
                       return False
-          
+                  
+                  # Check if the rule is for the specific S3 bucket
+                  if s3_bucket_name:
+                      detail = pattern_obj.get('detail', {})
+                      bucket_name_filter = detail.get('bucket', {}).get('name', [])
+                      
+                      # Check if the bucket name matches
+                      if isinstance(bucket_name_filter, list):
+                          if s3_bucket_name not in bucket_name_filter:
+                              logger.debug(f"Rule not for target bucket {s3_bucket_name}, skipping")
+                              return False
+                      else:
+                          # No bucket filter found, check if rule contains bucket name in pattern
+                          pattern_str = json.dumps(pattern_obj)
+                          if s3_bucket_name not in pattern_str:
+                              logger.debug(f"Rule doesn't reference target bucket {s3_bucket_name}, skipping")
+                              return False
+                  
                   # Check for voicemail paths in object key prefixes
                   detail = pattern_obj.get('detail', {})
                   object_config = detail.get('object', {})
                   key_filters = object_config.get('key', [])
-          
+                  
                   voicemail_indicators = [
                       'voicemail_transcripts/',
                       'voicemail_recordings/'
                   ]
-          
+                  
                   # Check if any key filter contains voicemail indicators
                   pattern_str = json.dumps(pattern_obj).lower()
                   has_voicemail_pattern = any(indicator in pattern_str for indicator in voicemail_indicators)
-          
+                  
                   if has_voicemail_pattern:
-                      logger.debug(f"Found S3 voicemail rule pattern")
+                      logger.debug(f"Found S3 voicemail rule pattern for bucket {s3_bucket_name}")
                       return True
-          
+                  
                   return False
-          
+                  
               except Exception as e:
                   logger.debug(f"Error checking S3 voicemail pattern: {str(e)}")
                   return False
@@ -608,18 +641,18 @@ Resources:
               """Check if S3 rule should be kept (belongs to current multiorg setup)"""
               if not rule_name or not lambda_prefix:
                   return False
-          
+              
               # Check if rule name contains current lambda prefix
               # Current multiorg rules should have the lambda prefix in the name
               return lambda_prefix in rule_name
 
-          def disable_rule_if_conflicting(rule_name: str, lambda_prefix: str) -> Dict[str, Any]:
+          def disable_rule_if_conflicting(rule_name: str, lambda_prefix: str, existing_call_center_api_name: str = '') -> Dict[str, Any]:
               """Check if rule is conflicting and disable it"""
               try:
                   rule = events_client.describe_rule(Name=rule_name)
                   if rule.get('State') != 'ENABLED':
                       return None
-          
+                  
                   # Check if rule targets any current multiorg functions
                   targets_response = events_client.list_targets_by_rule(Rule=rule_name)
                   for target in targets_response.get('Targets', []):
@@ -627,7 +660,11 @@ Resources:
                       if is_current_multiorg_function(target_arn, lambda_prefix):
                           logger.info(f"Keeping rule '{rule_name}' as it targets current multiorg function: {target_arn}")
                           return None
-          
+                  if existing_call_center_api_name:
+                      if existing_call_center_api_name not in rule_name:
+                          logger.info(f"Keeping rule '{rule_name}' as it is not related to existing call center API name: {existing_call_center_api_name}")
+                          return None
+
                   logger.info(f"Disabling conflicting rule: {rule_name}")
                   events_client.disable_rule(Name=rule_name)
                   return {
@@ -635,7 +672,7 @@ Resources:
                       'action': 'disabled',
                       'reason': 'conflicting_scv_rule'
                   }
-          
+                  
               except events_client.exceptions.ResourceNotFoundException:
                   logger.info(f"Rule '{rule_name}' not found, skipping")
                   return None
@@ -647,43 +684,43 @@ Resources:
               """Check if function is the current/correct multiorg function that should be kept"""
               if not function_arn or not lambda_prefix:
                   return False
-          
+              
               function_name = function_arn.split(':')[-1]
-          
+              
               if is_scv_function(function_arn):
                   return function_name.startswith(lambda_prefix)
-          
+              
               return False
 
           def is_scv_function(function_arn: str) -> bool:
               """Check if function is a consumer function that needs to be disabled"""
               if not function_arn:
                   return False
-          
+              
               function_name = function_arn.split(':')[-1]
-          
+              
               # Only consumer functions that we need to disable during migration
               consumer_patterns = [
                   # CTR Data Sync consumers
                   r'^[a-zA-Z0-9_-]+-CTRDataSyncFunction$',
-          
+                  
                   # Contact Lens consumers  
                   r'^[a-zA-Z0-9_-]+-ContactLensConsumerFunction$',
                   r'^[a-zA-Z0-9_-]+-ContactLensConsumer$',
-          
+                  
                   # Handle Contact Events (EventBridge aws.connect consumer)
                   r'^[a-zA-Z0-9_-]+-HandleContactEventsFunction$',
-          
+                  
                   # VoiceMail consumers
                   r'^[a-zA-Z0-9_-]+-VoiceMailAudioProcessingFunction$',
                   r'^[a-zA-Z0-9_-]+-VoiceMailTranscriberFunction$',
                   r'^[a-zA-Z0-9_-]+-VoiceMailPackagingFunction$'
               ]
-          
+              
               for pattern in consumer_patterns:
                   if re.match(pattern, function_name, re.IGNORECASE):
                       return True
-          
+              
               return False
 
           def is_scv_rule(rule_name: str) -> bool:
@@ -692,7 +729,7 @@ Resources:
                   # Get rule details to check EventPattern
                   rule_details = events_client.describe_rule(Name=rule_name)
                   event_pattern = rule_details.get('EventPattern')
-          
+                  
                   if not event_pattern:
                       # Check rule name patterns for non-S3 rules
                       name_lower = rule_name.lower()
@@ -700,7 +737,7 @@ Resources:
                           'contacteventsrule' in name_lower or
                           'scheduledrule' in name_lower
                       )
-          
+                  
                   # Parse EventPattern (could be string or dict)
                   if isinstance(event_pattern, str):
                       try:
@@ -709,7 +746,7 @@ Resources:
                           return False
                   else:
                       pattern_obj = event_pattern
-          
+                  
                   # Check for S3 voicemail rules - primary target
                   if 'aws.s3' in pattern_obj.get('source', []):
                       # Check if EventPattern contains voicemail paths
@@ -718,20 +755,20 @@ Resources:
                           'voicemail_transcripts/',
                           'voicemail_recordings/'
                       ]
-          
+                      
                       if any(indicator in pattern_str for indicator in voicemail_indicators):
-                          logger.info(f"Found S3 voicemail rule: {rule_name}")
-                          return True
-          
+                          logger.info(f"Found S3 voicemail rule: {rule_name} will be handled separately")
+                          return False
+                  
                   # Check for Connect contact event rules
                   if 'aws.connect' in pattern_obj.get('source', []):
                       detail_types = pattern_obj.get('detail-type', [])
                       if 'Amazon Connect Contact Event' in detail_types:
                           logger.info(f"Found Connect contact events rule: {rule_name}")
                           return True
-          
+                  
                   return False
-          
+                  
               except events_client.exceptions.ResourceNotFoundException:
                   logger.debug(f"Rule {rule_name} not found")
                   return False
@@ -743,7 +780,7 @@ Resources:
               """Send response to CloudFormation"""
               import urllib3
               import json
-          
+              
               response_url = event['ResponseURL']
               response_body = {
                   'Status': response_status,
@@ -754,10 +791,10 @@ Resources:
                   'LogicalResourceId': event['LogicalResourceId'],
                   'Data': response_data
               }
-          
+              
               json_response_body = json.dumps(response_body)
               headers = {'content-type': '', 'content-length': str(len(json_response_body))}
-          
+              
               http = urllib3.PoolManager()
               try:
                   response = http.request('PUT', response_url, headers=headers, body=json_response_body)

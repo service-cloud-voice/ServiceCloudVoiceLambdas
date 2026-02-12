@@ -24,9 +24,9 @@ describe('generateJWT', () => {
 
         expect(jwt.sign).toHaveBeenCalledWith({}, 'test_private_key', {
             issuer: 'test_org_id',
-            subject:  'test_call_center_api_name',
-            expiresIn:  'test_expires_in',
-            algorithm:  'RS256',
+            subject: 'test_call_center_api_name',
+            expiresIn: 'test_expires_in',
+            algorithm: 'RS256',
             jwtid: '123456789'
         });
         expect(result).toBe('test_signed_jwt');
@@ -83,6 +83,23 @@ describe('constructFlowInputParams', () => {
     it('Parameters should be empty as none of them start with flowInput-', () => {
         expect(utils.constructFlowInputParams(input2)).toStrictEqual(expected2);
     });
+
+    it('should extract flowInputParameters for routeVoiceCall with routingTarget and other params', () => {
+        const routeVoiceCallInput = {
+            "methodName": "routeVoiceCall",
+            "routingTarget": "AGENT-123",
+            "fallbackQueue": "QUEUE-456",
+            "flowInput-customerSegment": "VIP",
+            "flowInput-priority": "High",
+            "flowInput-param1": "value1"
+        };
+        const expected = {
+            "customerSegment": "VIP",
+            "priority": "High",
+            "param1": "value1"
+        };
+        expect(utils.constructFlowInputParams(routeVoiceCallInput)).toStrictEqual(expected);
+    });
 });
 
 describe('getCallAttributes', () => {
@@ -107,7 +124,7 @@ describe('getCallAttributes', () => {
             "nullField": null,
             "arrayField": [1, 2, 3]
         });
-
+        
         const result = utils.getCallAttributes(input);
         expect(result).toBe(expected);
     });
@@ -115,7 +132,7 @@ describe('getCallAttributes', () => {
     it('should handle empty input object', () => {
         const input = {};
         const expected = JSON.stringify({});
-
+  
         const result = utils.getCallAttributes(input);
         expect(result).toBe(expected);
     });

@@ -6,7 +6,7 @@
   "dependencies": {
     "aws-sdk": "2.1354.0",
     "winston": "3.2.1",
-    "axios": "1.6.4",
+    "axios": "1.13.2",
     "axios-logger": "2.5.0",
     "flat": "5.0.2",
     "jsonwebtoken": "9.0.0",

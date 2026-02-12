@@ -67,7 +67,7 @@ describe('telephonyIntegrationApi', () => {
       mockPost.mockResolvedValue(mockAxiosResponse);
 
       const result = await api.createVoiceCall(mockFieldValues, mockConfigData);
-
+      
       verifyGenerateJWT();
       expect(mockPost).toHaveBeenCalledWith(
         '/voiceCalls',
@@ -75,7 +75,7 @@ describe('telephonyIntegrationApi', () => {
           ...mockFieldValues,
           callCenterApiName: 'test-call-center'
         },
-        {
+        { 
           headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' }
         }
       );
@@ -94,6 +94,32 @@ describe('telephonyIntegrationApi', () => {
         message: 'Error creating VoiceCall record',
         context: { payload: mockError }
       });
+    });
+
+    it('should create voice call with different fieldValues object reference', async () => {
+      const fieldValsCopy = { ...mockFieldValues };
+      const expectedResponse = { voiceCallRecordId: 'voice-call-id' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.createVoiceCall(fieldValsCopy, mockConfigData);
+
+      expect(fieldValsCopy.callCenterApiName).toBe('test-call-center');
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should create voice call and verify response data extraction', async () => {
+      const expectedResponse = { voiceCallRecordId: 'voice-call-id', errors: [] };
+      const mockAxiosResponse = { data: expectedResponse, status: 200, headers: {} };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.createVoiceCall(mockFieldValues, mockConfigData);
+
+      expect(result).toEqual(expectedResponse);
+      expect(result).not.toHaveProperty('status');
+      expect(result).not.toHaveProperty('headers');
     });
   });
 
@@ -124,7 +150,7 @@ describe('telephonyIntegrationApi', () => {
 
     it('should handle error when updating voice call', async () => {
       const mockError = new Error('Update Error');
-
+      
       utils.generateJWT.mockResolvedValue('test-jwt-token');
       mockPatch.mockRejectedValue(mockError);
 
@@ -135,6 +161,35 @@ describe('telephonyIntegrationApi', () => {
         context: { payload: mockError }
       });
     });
+
+    it('should update voice call with empty fieldValues', async () => {
+      const emptyFieldValues = {};
+      const expectedResponse = { success: true };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.updateVoiceCall(contactId, emptyFieldValues, mockConfigData);
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/${contactId}`,
+        emptyFieldValues,
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should update voice call and verify response data extraction', async () => {
+      const expectedResponse = { success: true, updatedFields: ['status', 'endTime'] };
+      const mockAxiosResponse = { data: expectedResponse, status: 200 };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.updateVoiceCall(contactId, fieldValues, mockConfigData);
+
+      expect(result).toEqual(expectedResponse);
+      expect(result).not.toHaveProperty('status');
+    });
   });
 
   describe('executeOmniFlow', () => {
@@ -142,6 +197,7 @@ describe('telephonyIntegrationApi', () => {
     const payload = {
       flowDevName: 'TestFlow',
       fallbackQueue: 'TestQueue',
+      transferTarget: "TestTransferTarget",
       dialedNumber: '+1234567890',
       flowInputParameters: { param1: 'value1' }
     };
@@ -153,7 +209,7 @@ describe('telephonyIntegrationApi', () => {
       mockPatch.mockResolvedValue(mockAxiosResponse);
 
       const result = await api.executeOmniFlow(contactId, payload, mockConfigData);
-
+      
       verifyGenerateJWT();
       expect(mockPatch).toHaveBeenCalledWith(
         `/voiceCalls/${contactId}/omniFlow`,
@@ -166,7 +222,7 @@ describe('telephonyIntegrationApi', () => {
 
     it('should handle error when executing omni flow', async () => {
       const mockError = new Error('Flow Error');
-
+      
       utils.generateJWT.mockResolvedValue('test-jwt-token');
       mockPatch.mockRejectedValue(mockError);
 
@@ -176,6 +232,37 @@ describe('telephonyIntegrationApi', () => {
         message: `Error executing Omni Flow with ${contactId}`,
         context: { payload: mockError }
       });
+    });
+
+    it('should execute omni flow with minimal payload', async () => {
+      const minimalPayload = {
+        flowDevName: 'TestFlow'
+      };
+      const expectedResponse = { flowExecutionId: 'flow-exec-id' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.executeOmniFlow(contactId, minimalPayload, mockConfigData);
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/${contactId}/omniFlow`,
+        minimalPayload,
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should execute omni flow and verify response data extraction', async () => {
+      const expectedResponse = { flowExecutionId: 'flow-exec-id', status: 'running' };
+      const mockAxiosResponse = { data: expectedResponse, status: 200 };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.executeOmniFlow(contactId, payload, mockConfigData);
+
+      expect(result).toEqual(expectedResponse);
+      expect(result).not.toHaveProperty('status', 200);
     });
   });
 
@@ -202,6 +289,10 @@ describe('telephonyIntegrationApi', () => {
         { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
       );
       verifySCVLoggingUtilInfo('sendMessage');
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully sent transcript with ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
       expect(result).toEqual(expectedResponse);
     });
 
@@ -217,6 +308,21 @@ describe('telephonyIntegrationApi', () => {
         context: { payload: mockError }
       });
       expect(result).toEqual({ result: 'Error' });
+    });
+
+    it('should send message and verify success logging path', async () => {
+      const expectedResponse = { messageId: 'msg-id', timestamp: '2023-01-01T00:00:00Z' };
+      const mockAxiosResponse = { data: expectedResponse, status: 200 };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.sendMessage(contactId, payload, mockConfigData);
+
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully sent transcript with ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
     });
   });
 
@@ -253,6 +359,35 @@ describe('telephonyIntegrationApi', () => {
         context: { payload: mockError }
       });
     });
+
+    it('should cancel omni flow execution and verify response data extraction', async () => {
+      const expectedResponse = { success: true, cancelledAt: '2023-01-01T00:00:00Z' };
+      const mockAxiosResponse = { data: expectedResponse, status: 200 };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.cancelOmniFlowExecution(contactId, mockConfigData);
+
+      expect(result).toEqual(expectedResponse);
+      expect(result).not.toHaveProperty('status', 200);
+    });
+
+    it('should cancel omni flow execution with different contactId format', async () => {
+      const sobjectId = '00aXX000000XXXXXAAA';
+      const expectedResponse = { success: true };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.cancelOmniFlowExecution(sobjectId, mockConfigData);
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/${sobjectId}/clearRouting`,
+        null,
+        { headers: buildAuthHeaders() }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
   });
 
   describe('rerouteFlowExecution', () => {
@@ -274,6 +409,10 @@ describe('telephonyIntegrationApi', () => {
         { headers: buildAuthHeaders() }
       );
       verifySCVLoggingUtilInfo('rerouteFlowExecution');
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully triggered call rerouting for ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
       expect(result).toEqual(expectedResponse);
     });
 
@@ -288,6 +427,21 @@ describe('telephonyIntegrationApi', () => {
         message: `Error in Reroute Flow Execution with ${contactId}`,
         context: { payload: mockError }
       });
+    });
+
+    it('should reroute flow execution and verify success logging path', async () => {
+      const expectedResponse = { success: true, rerouteId: 'reroute-123' };
+      const mockAxiosResponse = { data: expectedResponse, status: 200 };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.rerouteFlowExecution(contactId, mockConfigData);
+
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully triggered call rerouting for ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
     });
   });
 
@@ -312,6 +466,10 @@ describe('telephonyIntegrationApi', () => {
         { headers: buildAuthHeaders() }
       );
       verifySCVLoggingUtilInfo('Callback');
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully triggered callback request for ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
       expect(result).toEqual(expectedResponse);
     });
 
@@ -326,6 +484,144 @@ describe('telephonyIntegrationApi', () => {
         message: `Error in Callback request execution with ${contactId}`,
         context: { payload: mockError }
       });
+    });
+
+    it('should execute callback and verify success logging path', async () => {
+      const expectedResponse = { callbackId: 'callback-id', scheduledTime: '2023-01-01T00:00:00Z' };
+      const mockAxiosResponse = { data: expectedResponse, status: 200 };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.callbackExecution(contactId, payload, mockConfigData);
+
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully triggered callback request for ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should execute callback with different phone number format', async () => {
+      const differentPayload = {
+        callbackNumber: '1234567890'
+      };
+      const expectedResponse = { callbackId: 'callback-id' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.callbackExecution(contactId, differentPayload, mockConfigData);
+
+      expect(mockPost).toHaveBeenCalledWith(
+        `/voiceCalls/${contactId}/requestCallback`,
+        differentPayload,
+        { headers: buildAuthHeaders() }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
+  });
+
+  describe('routeVoiceCall', () => {
+    const contactId = 'test-contact-id';
+    const payload = {
+      routingTarget: 'AGENT-123',
+      fallbackQueue: 'QUEUE-456',
+      flowInputParameters: { param1: 'value1' }
+    };
+
+    it('should successfully route voice call', async () => {
+      const expectedResponse = { status: 'Success' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.routeVoiceCall(contactId, payload, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/route/${contactId}`,
+        payload,
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      verifySCVLoggingUtilInfo('Route Voice Call');
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully routed voice call for ${contactId}`,
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should handle error when routing voice call', async () => {
+      const mockError = new Error('Routing Error');
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockRejectedValue(mockError);
+
+      await expect(api.routeVoiceCall(contactId, payload, mockConfigData)).rejects.toThrow('Error routing voice call');
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+        message: `Error routing voice call with ${contactId}`,
+        context: { payload: mockError }
+      });
+    });
+
+    it('should route voice call with only routingTarget', async () => {
+      const minimalPayload = {
+        routingTarget: 'QUEUE-789'
+      };
+      const expectedResponse = { status: 'Success' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.routeVoiceCall(contactId, minimalPayload, mockConfigData);
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/route/${contactId}`,
+        minimalPayload,
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should route voice call with flow input parameters only', async () => {
+      const flowPayload = {
+        routingTarget: 'Flow.Example_Flow',
+        flowInputParameters: { customerSegment: 'VIP', priority: 'High' }
+      };
+      const expectedResponse = { status: 'Success' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.routeVoiceCall(contactId, flowPayload, mockConfigData);
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/route/${contactId}`,
+        flowPayload,
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should route voice call with different contactId format', async () => {
+      const sobjectId = '00aXX000000XXXXXAAA';
+      const expectedResponse = { status: 'Success' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPatch.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.routeVoiceCall(sobjectId, payload, mockConfigData);
+
+      expect(mockPatch).toHaveBeenCalledWith(
+        `/voiceCalls/route/${sobjectId}`,
+        payload,
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Successfully routed voice call for ${sobjectId}`,
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
     });
   });
 

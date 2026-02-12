@@ -1,0 +1,518 @@
+---
+Description: |
+  Service Cloud Voice SCVHealthCheck Stack - Standalone stack for health check resources
+Parameters:
+  CallCenterApiName:
+    Type: String
+    Description: Salesforce CallCenter API name in lower case, used as prefix for resource names
+  ConnectInstanceId:
+    Type: String
+    Description: Connect Instance Id for building ARN in health check
+  S3BucketForScvResources:
+    Type: String
+    Description: The S3 bucket that stores SCV resources, like Lambda functions.
+  S3BucketForTenantResources:
+    Type: String
+    Description: The S3 bucket that stores tenant resources, like voice recordings and transcripts
+  SalesforceRelease:
+    Type: String
+    Description: Salesforce Major Release Version
+  Version:
+    Type: String
+    Description: Stack Version and Lambda Version.
+    Default: V20.0
+  Sku:
+    Type: String
+    Description: SkU Type of the contact center
+    AllowedValues:
+      - multiorg
+      - importxml
+  CustomerConfiguredS3BucketName:
+    Default: ''
+    Type: String
+    Description: Customer S3 Bucket for voice recording and transcript.
+  PermissionBoundaryARN:
+    Type: String
+    Description: Permission Boundary ARN for IAM roles
+    Default: ""
+  InstanceType:
+    Description: Connect Instance type.
+    Default: SOURCE
+    Type: String
+    AllowedValues:
+      - SOURCE
+      - REPLICA
+  MpaId:
+    Default: 793525387755
+    Type: String
+    Description: Master Payer Account Id
+  LambdaPrefix:
+    Type: String
+    Default: ''
+    Description: Prefix for Lambda function names (used for multiorg or importxml SKU)
+
+
+Conditions:
+  IsSystemManagedBucket:
+    !Equals [!Ref CustomerConfiguredS3BucketName, ""]
+  PermissionBoundaryIsNull:
+    !Equals [!Ref PermissionBoundaryARN, ""]
+  UseSourceCondition:
+    !Equals [!Ref InstanceType, "SOURCE"]
+  IsMultiorgSku:
+    !Equals [!Ref Sku, "multiorg"]
+  HasLambdaPrefix:
+    !Not [!Equals [!Ref LambdaPrefix, ""]]
+
+Resources:
+  HealthCheckRole:
+    Type: AWS::IAM::Role
+    Condition: UseSourceCondition
+    Properties:
+      RoleName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckRole", !Sub "${CallCenterApiName}-SCVHealthCheckRole"]
+      PermissionsBoundary:
+        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${MpaId}:root"
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckInvokePolicy", !Sub "${CallCenterApiName}-SCVHealthCheckInvokePolicy"]
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              # Lambda invocation permissions
+              - Action:
+                  - lambda:InvokeFunction
+                  - lambda:GetFunctionConfiguration
+                Resource:
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-SCVHealthCheckFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVHealthCheckFunction"]
+                Effect: Allow
+              # S3 permissions for reading health reports
+              - Action:
+                  - s3:ListBucket
+                Resource:
+                  - !If [IsSystemManagedBucket, !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}", !Sub "arn:${AWS::Partition}:s3:::${CustomerConfiguredS3BucketName}"]
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                Resource:
+                  - !If [IsSystemManagedBucket, !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/health_report/*", !Sub "arn:${AWS::Partition}:s3:::${CustomerConfiguredS3BucketName}/health_report/*"]
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/health_report/*"
+                Effect: Allow
+      Description: Role for Salesforce to invoke SCVHealthCheck Lambda and monitor stack health
+
+  # Separate policy for multiorg-specific resources
+  SCVHealthCheckMultiorgAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: IsMultiorgSku
+    Properties:
+      ManagedPolicyName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckMultiorgAccessPolicy", !Sub "${CallCenterApiName}-SCVHealthCheckMultiorgAccessPolicy"]
+      Path: "/scv/"
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Action:
+              - iam:GetRole
+              - iam:GetRolePolicy
+              - iam:ListAttachedRolePolicies
+              - iam:ListRolePolicies
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+              - iam:SimulatePrincipalPolicy
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-MultiorgMigrationRole"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-S3SecretCacheTTLRole"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-StreamDiscoveryFunctionRole"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-KvsTranscriberRole"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/${LambdaPrefix}-LambdaS3AccessPolicy"
+            Effect: Allow
+          - Action:
+              - lambda:GetFunction
+              - lambda:GetFunctionConfiguration
+              - lambda:GetAlias
+              - lambda:GetPolicy
+            Resource:
+              # Multiorg VoiceMail functions
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-VoiceMailAudioProcessingFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-VoiceMailAudioProcessingFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-VoiceMailPackagingFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-VoiceMailPackagingFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-VoiceMailTranscribeFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-VoiceMailTranscribeFunction:*"
+              # Multiorg-specific Lambda functions
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgCTRDataSyncFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgCTRDataSyncFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgContactDataSync"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgContactDataSync:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgContactLensConsumer"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgContactLensConsumer:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgContactLensProcessorFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgContactLensProcessorFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgHandleContactEvents"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgHandleContactEvents:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeSalesforceRestApiFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeSalesforceRestApiFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeTelephonyIntegrationApiFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeTelephonyIntegrationApiFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgKvsConsumerTrigger"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgKvsConsumerTrigger:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgPostCallAnalysisTrigger"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgPostCallAnalysisTrigger:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgkvsTranscriber"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgkvsTranscriber:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-EnterpriseEventManagement"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-EnterpriseEventManagement:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-S3SecretCacheTTL"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-S3SecretCacheTTL:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-streamDiscovery"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-streamDiscovery:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-RealtimeAlert"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-RealtimeAlert:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction:*"
+            Effect: Allow
+          - Action:
+              - events:DescribeRule
+              - events:ListTargetsByRule
+            Resource:
+              - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${LambdaPrefix}-*"
+              - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/*VoiceMail*"
+            Effect: Allow
+          - Action:
+              - cloudwatch:DescribeAlarms
+            Resource:
+              - !Sub "arn:${AWS::Partition}:cloudwatch:*:${AWS::AccountId}:alarm:SCV Lambda ${LambdaPrefix}-*"
+            Effect: Allow
+          - Action:
+              - lambda:GetLayerVersion
+            Resource:
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:layer:${LambdaPrefix}-*"
+            Effect: Allow
+      
+  HealthCheckLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: UseSourceCondition
+    Properties:
+      RoleName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckLambdaExecutionRole", !Sub "${CallCenterApiName}-SCVHealthCheckLambdaExecutionRole"]
+      PermissionsBoundary:
+        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !If [IsMultiorgSku, !Ref SCVHealthCheckMultiorgAccessPolicy, !Ref "AWS::NoValue"]
+      Policies:
+        - PolicyName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckAccessPolicy", !Sub "${CallCenterApiName}-SCVHealthCheckAccessPolicy"]
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - cloudwatch:DescribeAlarms
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:ListMetrics
+                Resource:
+                  - "*"
+                Effect: Allow
+              # CloudFormation permissions for ProviderCreator stack validation
+              - Action:
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackResources
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:cloudformation:*:${AWS::AccountId}:stack/SCVTenantStack/*"
+                  - !Sub "arn:${AWS::Partition}:cloudformation:*:${AWS::AccountId}:stack/SCVBYOATenantStack/*"
+                Effect: Allow
+              - Action:
+                  - iam:GetRole
+                  - iam:ListAttachedRolePolicies
+                  - iam:GetPolicy
+                  - iam:GetPolicyVersion
+                  - iam:SimulatePrincipalPolicy
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SCVS3Role"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SCVS3RoleForEventBridgeConfig"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SCVS3RoleForBucketPolicyConfig"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SCVTenantBucketWriteAccessRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SCVCustomAccessRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SAMLRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-ConnectCallRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-TenantBucketWriteAccessRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*CTRDataSyncFunctionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*ContactDataSyncFunctionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*PostCallAnalysisTriggerFunctionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*InvokeTelephonyIntegrationApiFunctionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*InvokeSalesforceRestApiFunctionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*SSMLambdaExecutionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*SecretConfiguratorLambdaRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*KvsTranscriberRoleResource"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*KvsConsumerTriggerRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*ContactLensConsumerFunctionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*AmazonConnectManagementRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*ConnectConfiguratorLambdaRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*ContactLensStreamingRoleResource"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*IDPLambdaRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*ProvisioningRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*S3Role"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*TrailLogGroupRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*VoiceMailAudioProcessingRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*VoiceMailPackagingRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*VoiceMailTranscribeRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*RealtimeAlertRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*HandleContactEventsRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*HealthCheckLambdaExecutionRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVUpdateCredentialRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVHealthCheckAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/HealthCheckAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVSecretsManagerAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SecretsManagerAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVSSMAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SSMAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVLambdaAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/LambdaAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVKinesisDataStreamAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/KinesisDataStreamAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVKMSAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/KMSAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVAmazonConnectAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/AmazonConnectAccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVS3AccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/S3AccessPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVS3ManagedPolicy"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/S3ManagedPolicy"
+                Effect: Allow
+              - Action:
+                  - lambda:GetFunction
+                  - lambda:GetFunctionConfiguration
+                  - lambda:GetAlias
+                  - lambda:GetPolicy
+                Resource:
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-CTRDataSyncFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-CTRDataSyncFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-CTRDataSyncFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-CTRDataSyncFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactDataSyncFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactDataSyncFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactDataSyncFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactDataSyncFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeTelephonyIntegrationApiFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeTelephonyIntegrationApiFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeTelephonyIntegrationApiFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeTelephonyIntegrationApiFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeSalesforceRestApiFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeSalesforceRestApiFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeSalesforceRestApiFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeSalesforceRestApiFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsTranscriber", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsTranscriber"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsTranscriber:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsTranscriber:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsConsumerTrigger", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsConsumerTrigger"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsConsumerTrigger:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsConsumerTrigger:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-AuthKeysSSMUtilFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-AuthKeysSSMUtilFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-HandleContactEventsFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-HandleContactEventsFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-HandleContactEventsFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-HandleContactEventsFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactLensConsumerFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactLensConsumerFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactLensConsumerFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactLensConsumerFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactLensProcessorFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactLensProcessorFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactLensProcessorFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactLensProcessorFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-PostCallAnalysisTriggerFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-PostCallAnalysisTriggerFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-PostCallAnalysisTriggerFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-PostCallAnalysisTriggerFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-CustomSSMFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-CustomSSMFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-CustomSSMFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-CustomSSMFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-SCVSecretConfigurator", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVSecretConfigurator"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-SCVSecretConfigurator:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVSecretConfigurator:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-SCVHealthCheckFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVHealthCheckFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-SCVHealthCheckFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVHealthCheckFunction:*"]
+                  # Non-multiorg functions (only for non-multiorg SKUs)
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-S3BucketEventBridgeConfigurationFunction"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-S3BucketEventBridgeConfigurationFunction:*"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVAccessBYOACConfigurationFunction"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-SCVAccessBYOACConfigurationFunction:*"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-RealtimeAlert"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-RealtimeAlert:*"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-VoiceMailPackagingFunction"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-VoiceMailPackagingFunction:*"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-VoiceMailTranscribeFunction"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-VoiceMailTranscribeFunction:*"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-VoiceMailAudioProcessingFunction"]
+                  - !If [IsMultiorgSku, !Ref "AWS::NoValue", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-VoiceMailAudioProcessingFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ConnectConfigurationFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ConnectConfigurationFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ConnectConfigurationFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ConnectConfigurationFunction:*"]
+                  - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-RetentionPeriodFunction"
+                  - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-RetentionPeriodFunction:*"
+                  - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:*ProviderCreator*"
+                  - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:*ProviderCreator*:*"
+                Effect: Allow
+              - Action:
+                  - lambda:ListLayers
+                  - lambda:ListEventSourceMappings
+                  - lambda:GetLayerVersion
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - iam:ListPolicies
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - kms:ListAliases
+                Resource:
+                  - "*"
+                Effect: Allow
+              - Action:
+                  - s3:ListBucket
+                  - s3:GetLifecycleConfiguration
+                  - s3:PutLifecycleConfiguration
+                  - s3:GetBucketPolicy
+                Resource:
+                  - !If [IsSystemManagedBucket, !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}", !Sub "arn:${AWS::Partition}:s3:::${CustomerConfiguredS3BucketName}"]
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}"
+                Effect: Allow
+              - Action:
+                  - s3:GetObject
+                Resource:
+                  - !If [IsSystemManagedBucket, !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/health_report/*", !Sub "arn:${AWS::Partition}:s3:::${CustomerConfiguredS3BucketName}/health_report/*"]
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/health_report/*"
+                Effect: Allow
+              - Action:
+                  - s3:PutObject
+                  - s3:PutObjectTagging
+                Resource:
+                  - !If [IsSystemManagedBucket, !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/health_report/*", !Sub "arn:${AWS::Partition}:s3:::${CustomerConfiguredS3BucketName}/health_report/*"]
+                  - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/health_report/*"
+                Effect: Allow
+              # S3 permissions for CloudTrail bucket (read-only validation)
+              - Action:
+                  - s3:ListBucket
+                  - s3:GetBucketPolicy
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::scv-${AWS::AccountId}-cloudtrail"
+                  - !Sub "arn:${AWS::Partition}:s3:::scv-${AWS::AccountId}-byoa-cloudtrail"
+                Effect: Allow
+              - Action:
+                  - kinesis:DescribeStream
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:kinesis:*:${AWS::AccountId}:stream/${CallCenterApiName}-CTRStream"
+                  - !Sub "arn:${AWS::Partition}:kinesis:*:${AWS::AccountId}:stream/${CallCenterApiName}-ContactLensStream"
+                Effect: Allow
+              - Action:
+                  - kinesis:ListStreams
+                Resource: "*"
+                Effect: Allow
+              - Action:
+                  - kms:DescribeKey
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:kms:*:${AWS::AccountId}:key/*"
+                Effect: Allow
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/resourceOwner": "scv"
+              - Action:
+                  - kms:DescribeKey
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:kms:*:${AWS::AccountId}:alias/aws/lambda"
+                  - !Sub "arn:${AWS::Partition}:kms:*:${AWS::AccountId}:alias/aws/ssm"
+                Effect: Allow
+              - Action:
+                  - events:DescribeRule
+                  - events:ListRules
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${CallCenterApiName}-ContactEventsRule"
+                  - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${CallCenterApiName}-RealtimeAlertRule"
+                  - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${CallCenterApiName}-VoiceMailRule"
+                  - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${CallCenterApiName}-RetentionPeriodRule"
+                  - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${CallCenterApiName}-*"
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${LambdaPrefix}-*", !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${CallCenterApiName}-*"]
+                Effect: Allow
+              - Action:
+                  - connect:DescribeInstance
+                  - connect:GetMetricData
+                  - connect:ListInstanceStorageConfigs
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:connect:*:${AWS::AccountId}:instance/${ConnectInstanceId}"
+                Effect: Allow
+              - Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/${CallCenterApiName}-salesforce-*"
+                  - !Sub "arn:${AWS::Partition}:ssm:*:${AWS::AccountId}:parameter/${CallCenterApiName}-scrt-jwt-auth-private-key"
+                Effect: Allow
+      Description: Execution role for HealthCheck Lambda function with comprehensive SCV resource access
+
+  HealthCheckLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - python3.13
+      LayerName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-HealthCheckFunctionLayer", !Sub "${CallCenterApiName}-HealthCheckFunctionLayer"]
+      Description: Health check Function layer containing shared utilities and dependencies
+      Content:
+        S3Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        S3Key: !Sub "${SalesforceRelease}/scvResourceDefinitionsLayer${Version}"
+
+  HealthCheckFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckFunction", !Sub "${CallCenterApiName}-SCVHealthCheckFunction"]
+      Description: Health check Lambda function for monitoring system health and performance
+      Runtime: python3.13
+      Handler: healthcheck.lambda_handler
+      Role: !If 
+        - UseSourceCondition
+        - !GetAtt HealthCheckLambdaExecutionRole.Arn
+        - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-SCVHealthCheckLambdaExecutionRole", !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${CallCenterApiName}-SCVHealthCheckLambdaExecutionRole"]
+      Code:
+        S3Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        S3Key: !Sub "${SalesforceRelease}/healthCheck${Version}"
+      Layers:
+        - !Ref HealthCheckLayer
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          VERSION: !Ref Version
+          CALL_CENTER_API_NAME: !Ref CallCenterApiName
+          SKU: !Ref Sku
+          CONNECT_INSTANCE_ID: !Ref ConnectInstanceId
+          S3_BUCKET_FOR_TENANT_RESOURCES: !Ref S3BucketForTenantResources
+          S3_BUCKET_FOR_REPORTS: !If [IsSystemManagedBucket, !Sub "${S3BucketForTenantResources}-${AWS::AccountId}", !Ref CustomerConfiguredS3BucketName]
+          LAMBDA_PREFIX: !Ref LambdaPrefix
+
+Outputs:
+  HealthCheckRole:
+    Condition: UseSourceCondition
+    Description: ARN of the HealthCheck role for Salesforce to assume
+    Value: !GetAtt HealthCheckRole.Arn
+    Export:
+      Name: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckRole", !Sub "${CallCenterApiName}-SCVHealthCheckRole"]
+
+  HealthCheckLambdaExecutionRole:
+    Condition: UseSourceCondition
+    Description: ARN of the HealthCheck Lambda execution role
+    Value: !GetAtt HealthCheckLambdaExecutionRole.Arn
+    Export:
+      Name: !If [HasLambdaPrefix, !Sub "${LambdaPrefix}-SCVHealthCheckLambdaExecutionRole", !Sub "${CallCenterApiName}-SCVHealthCheckLambdaExecutionRole"]
+
+  HealthCheckLayer:
+    Description: Health Check Layer ARN
+    Value: !Ref HealthCheckLayer
+
+  HealthCheckFunction:
+    Description: Health Check Lambda Function ARN
+    Value: !GetAtt HealthCheckFunction.Arn
+
+  HealthCheckFunctionName:
+    Description: Name of the Health Check Lambda Function
+    Value: !Ref HealthCheckFunction
+
+  InstanceType:
+    Description: Connect Instance type used for this health check stack
+    Value: !Ref InstanceType
+
+Metadata:
+  StageName: ServiceVoiceSCVHealthCheckStandalone
+  Author: Salesforce Service Cloud
+  Description: Standalone Service Cloud Voice SCVHealthCheck resources for monitoring system health and performance

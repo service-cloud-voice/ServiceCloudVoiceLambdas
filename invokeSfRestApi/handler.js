@@ -5,6 +5,8 @@ const queryEngine = require("./queryEngine");
 const utils = require("./utils");
 const SFSPhoneCallFlow = require("./SFSPhoneCallFlow");
 const { fetchOutboundPhoneNumber } = require("./fetchOutboundPhoneNumber");
+const { fetchAgentPhoneNumber } = require("./fetchAgentPhoneNumber");
+const { fetchDefaultVoicemailGreetingUrl } = require("./fetchDefaultVoicemailGreetingUrl");
 const config = require("./config");
 
 // --------------- Events -----------------------
@@ -97,6 +99,14 @@ exports.handler = async (event) => {
     }
     case "fetchOutboundPhoneNumber": {
       result = await fetchOutboundPhoneNumber(event, secretName, accessTokenSecretName);
+      break;
+    }
+    case "fetchAgentPhoneNumber": {
+      result = await fetchAgentPhoneNumber(event);
+      break;
+    }
+    case "fetchDefaultVoicemailGreetingUrl": {
+      result = await fetchDefaultVoicemailGreetingUrl(event, secretName, accessTokenSecretName);
       break;
     }
     default: {

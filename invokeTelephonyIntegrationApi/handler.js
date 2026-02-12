@@ -166,6 +166,7 @@ exports.handler = async (event) => {
       const payload = {
         flowDevName: event.Details.Parameters.flowDevName,
         fallbackQueue: event.Details.Parameters.fallbackQueue,
+        transferTarget: event.Details.Parameters.transferTarget,
         dialedNumber: dialedNumberParam,
         flowInputParameters: utils.constructFlowInputParams(
           event.Details.Parameters
@@ -189,6 +190,42 @@ exports.handler = async (event) => {
         callbackNumber: event.Details.Parameters.customerCallbackNumber
       };
       result = await api.callbackExecution(contactIdValue, payload, configData);
+      break;
+    case "routeVoiceCall":
+      const routePayload = {
+        routingTarget: event.Details.Parameters.routingTarget,
+        fallbackQueue: event.Details.Parameters.fallbackQueue,
+        flowInputParameters: utils.constructFlowInputParams(
+          event.Details.Parameters
+        ),
+      };
+      result = await api.routeVoiceCall(contactIdValue, routePayload, configData);
+      break;
+    case "updateCache":
+      const cacheData = {
+        contactId: contactIdValue,
+        secretName: secretNameFromAttributes,
+        timestamp: new Date().toISOString(),
+      };
+      const updated = await cacheUtils.storeInCache(contactIdValue, cacheData);
+      if (!updated) {
+        result = {
+          statusCode: 500,
+          message: "Failed to update cache",
+          contactId: contactIdValue
+        };
+        SCVLoggingUtil.error({
+          message: `Failed to update cache for contact ${contactIdValue}`,
+          context: { contactId: contactIdValue, payload: cacheData }
+        });
+      } 
+      else {
+        result = {
+          statusCode: 200,
+          message: "Cache updated successfully",
+          contactId: contactIdValue
+        };
+      }
       break;
     default:
       SCVLoggingUtil.warn({
