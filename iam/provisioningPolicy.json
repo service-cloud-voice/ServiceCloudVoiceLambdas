@@ -1,0 +1,234 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "WildcardAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ds:*",
+                "logs:DescribeLogGroups",
+                "lambda:GetEventSourceMapping",
+                "kms:CreateKey"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "LogsAccess",
+            "Effect": "Allow",
+            "Action": "logs:*",
+            "Resource": "arn:aws:logs:*:774840541929:log-group:*scvbyoaaccesscloudwatchloggroup*"
+        },
+        {
+            "Sid": "EventsAccess",
+            "Effect": "Allow",
+            "Action": [
+                "events:DeleteRule",
+                "events:DescribeRule",
+                "events:PutEvents",
+                "events:PutRule",
+                "events:PutTargets",
+                "events:RemoveTargets"
+            ],
+            "Resource": [
+                "arn:aws:events:*:774840541929:rule/*VoiceMail*",
+                "arn:aws:events:*:774840541929:rule/*-ScheduledRule",
+                "arn:aws:events:*:774840541929:rule/*-ContactEventsRule"
+            ]
+        },
+        {
+            "Sid": "LambdaEventSourceAccess",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:CreateEventSourceMapping",
+                "lambda:UpdateEventSourceMapping",
+                "lambda:DeleteEventSourceMapping"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "lambda:FunctionArn": [
+                        "arn:aws:lambda:*:774840541929:*MailAudioProcessingFunction*",
+                        "arn:aws:lambda:*:774840541929:*CTRDataSyncFunction*",
+                        "arn:aws:lambda:*:774840541929:*ContactLensConsumerFunction*"
+                    ]
+                }
+            }
+        },
+        {
+            "Sid": "LambdaAccess",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:*"
+            ],
+            "Resource": [
+                "arn:aws:lambda:*:774840541929:*ContactLensConsumerFunction*",
+                "arn:aws:lambda:*:774840541929:*MailPackagingFunction*",
+                "arn:aws:lambda:*:774840541929:*MailTranscribeFunction*",
+                "arn:aws:lambda:*:774840541929:*AuthKeysSSMUtilFunction*",
+                "arn:aws:lambda:*:774840541929:*CustomSSMFunction*",
+                "arn:aws:lambda:*:774840541929:*InvokeTelephonyIntegrationApiFunction*",
+                "arn:aws:lambda:*:774840541929:*CTRDataSyncFunction*",
+                "arn:aws:lambda:*:774840541929:*RealtimeAlert*",
+                "arn:aws:lambda:*:774840541929:*MailAudioProcessingFunction*",
+                "arn:aws:lambda:*:774840541929:*InvokeSalesforceRestApiFunction*",
+                "arn:aws:lambda:*:774840541929:*PostCallAnalysisTriggerFunction*",
+                "arn:aws:lambda:*:774840541929:*kvsTranscriber*",
+                "arn:aws:lambda:*:774840541929:*ConsumerTrigger*",
+                "arn:aws:lambda:*:774840541929:*HandleContactEventsFunction*",
+                "arn:aws:lambda:*:774840541929:*ContactLensProcessorFunction*",
+                "arn:aws:lambda:*:774840541929:*ConnectConfigurationFunction*",
+                "arn:aws:lambda:*:774840541929:*ProviderCreator*",
+                "arn:aws:lambda:*:774840541929:*S3BucketEventBridgeConfigurationFunction*",
+                "arn:aws:lambda:*:774840541929:*S3BucketPolicyConfigurationFunction*",
+                "arn:aws:lambda:*:774840541929:*SCVAccessBYOACConfigurationFunction*",
+                "arn:aws:lambda:*:774840541929:*TDGConfigurationFunction*",
+                "arn:aws:lambda:*:774840541929:*ContactDataSyncFunction*",
+                "arn:aws:lambda:*:774840541929:event-source-mapping*",
+                "arn:aws:lambda:*:774840541929:*SCVSecretConfigurator*"
+            ]
+        },
+        {
+            "Sid": "S3Write",
+            "Effect": "Allow",
+            "Action": [
+                "s3:List*",
+                "s3:Get*",
+                "s3:Create*",
+                "s3:Put*",
+                "s3:Delete*"
+            ],
+            "Resource": [
+                "arn:aws:s3:::*-byoa-cloudtrail",
+                "arn:aws:s3:::*-774840541929",
+                "arn:aws:s3:::prod-scv-resources-*",
+                "arn:aws:s3:::prod-byoa-scv-resources-*",
+                "arn:aws:s3:::*-byoa-cloudtrail/*",
+                "arn:aws:s3:::*-774840541929/*",
+                "arn:aws:s3:::connect-ce3257f2cae7",
+                "arn:aws:s3:::connect-ce3257f2cae7/*",
+                "arn:aws:s3:::prod-scv-saml-metadata/*"
+            ]
+        },
+        {
+            "Sid": "ResourceBasedAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:*",
+                "kms:*",
+                "sns:*",
+                "cloudwatch:*",
+                "kinesis:*",
+                "cloudTrail:*"
+            ],
+            "Resource": [
+                "arn:aws:ssm:*:774840541929:parameter/<Contact_Center_Internal_Name>-*",
+                "arn:aws:kms:*:774840541929:key/*",
+                "arn:aws:kms:*:774840541929:alias/*LMKvsKey",
+                "arn:aws:kms:*:774840541929:alias/*KvsKey",
+                "arn:aws:sns:*:774840541929:*-RealtimeAlertTopic",
+                "arn:aws:cloudwatch::774840541929:dashboard/*-ServiceCloudVoice*",
+                "arn:aws:cloudwatch:*:774840541929:alarm:SCV*",
+                "arn:aws:kinesis:*:774840541929:stream/*-774840541929-CTRStream",
+                "arn:aws:kinesis:*:774840541929:stream/*-774840541929-ContactLensStream",
+                "arn:aws:kinesis:*:774840541929:stream/<BYOAC_CUSTOM_CTR_STREAM>",
+                "arn:aws:kinesis:*:774840541929:stream/<BYOAC_CUSTOM_CLS_STREAM>",
+                "arn:aws:cloudtrail:*:774840541929:trail/scvBYOACloudTrail"
+            ]
+        },
+        {
+            "Sid": "IAMAccess",
+            "Effect": "Allow",
+            "Action": [
+                "iam:*Role*",
+                "iam:*Roles*",
+                "iam:*Policy*",
+                "iam:*SAMLProvider"
+            ],
+            "Resource": [
+                "arn:aws:iam::774840541929:role/SCV*",
+                "arn:aws:iam::774840541929:role/*HandleContactEvents*",
+                "arn:aws:iam::774840541929:policy/scv/SCV*",
+                "arn:aws:iam::774840541929:role/BYOA*",
+                "arn:aws:iam::774840541929:role/*-SCVS3Role*",
+                "arn:aws:iam::774840541929:role/*-SAMLRole*",
+                "arn:aws:iam::774840541929:role/*-ConnectCallRole*",
+                "arn:aws:iam::774840541929:role/*SCVCustomAccessRole",
+                "arn:aws:iam::774840541929:saml-provider/SalesforceServiceVoiceIdp",
+                "arn:aws:iam::774840541929:role/aws-service-role/*"
+            ]
+        },
+        {
+            "Sid": "CloudformationAccess",
+            "Effect": "Allow",
+            "Action": "cloudformation:*",
+            "Resource": [
+                "arn:aws:cloudformation:*:aws:transform/Serverless-*",
+                "arn:aws:s3:::*-byoa-cloudtrail",
+                "arn:aws:s3:::*-774840541929",
+                "arn:aws:s3:::connect-ce3257f2cae7",
+                "arn:aws:s3:::prod-scv-resources-*",
+                "arn:aws:s3:::prod-byoa-scv-resources-*",
+                "arn:aws:cloudwatch::774840541929:dashboard/*-ServiceCloudVoice*",
+                "arn:aws:kinesis:*:774840541929:stream/*-774840541929-CTRStream",
+                "arn:aws:kinesis:*:774840541929:stream/*-774840541929-ContactLensStream",
+                "arn:aws:cloudformation:*:774840541929:stack/*ContactCenterStack/*",
+                "arn:aws:cloudformation:*:774840541929:stack/*ContactCenterStack*/*",
+                "arn:aws:cloudformation:*:774840541929:stack/SCVBYOATenantStack*/*",
+                "arn:aws:cloudformation:*:774840541929:stack/*SCVTrafficDistributionStack/*"
+            ]
+        },
+        {
+            "Sid": "ConnectAccess",
+            "Effect": "Allow",
+            "Action": [
+                "connect:Get*",
+                "connect:List*",
+                "connect:Search*",
+                "connect:Describe*",
+                "connect:CreateAgentStatus",
+                "connect:CreateContactFlow",
+                "connect:CreateInstance",
+                "connect:CreateHoursOfOperation",
+                "connect:CreateContactFlowModule",
+                "connect:CreateQueue",
+                "connect:CreateQuickConnect",
+                "connect:CreateRoutingProfile",
+                "connect:CreateUser",
+                "connect:ReplicateInstance",
+                "connect:StartOutboundVoiceContact",
+                "connect:TagResource",
+                "connect:AssociateApprovedOrigin",
+                "connect:AssociateLambdaFunction",
+                "connect:DisassociateLambdaFunction",
+                "connect:DisassociateApprovedOrigin",
+                "connect:DeleteQueue",
+                "connect:DeleteUser",
+                "connect:DeleteQuickConnect",
+                "connect:CreateTrafficDistributionGroup",
+                "connect:UpdateTrafficDistribution",
+                "connect:DisassociateRoutingProfileQueues",
+                "connect:MonitorContact",
+                "connect:UpdateQuickConnectName",
+                "connect:UpdateInstanceAttribute",
+                "connect:UpdateHoursOfOperation",
+                "connect:UpdateQueueName",
+                "connect:UpdateQueueStatus",
+                "connect:UpdateUserRoutingProfile",
+                "connect:UpdateContactAttributes",
+                "connect:UpdateRoutingProfileQueues",
+                "connect:UpdateRoutingProfileName",
+                "connect:UpdateContactRoutingData",
+                "connect:UpdateRoutingProfileDefaultOutboundQueue",
+                "connect:PutUserStatus",
+                "connect:CreatePredefinedAttribute",
+                "connect:DeletePredefinedAttribute",
+                "connect:DeleteInstance"
+            ],
+            "Resource": [
+                "arn:aws:connect:*:774840541929:/instance",
+                "arn:aws:connect:*:774840541929:instance/*",
+                "arn:aws:connect:*:774840541929:traffic-distribution-group/*"
+            ]
+        }
+    ]
+}

@@ -34,6 +34,10 @@ Parameters:
     Type: String
     Description: The S3 bucket that stores resources for the tenant, like voice recordings and transcripts.
 
+  S3BucketForSecretCache:
+    Type: String
+    Description: The S3 bucket that will be used for caching org-specific secret name against each contact.
+
   PermissionBoundaryARN:
     Type: String
     Description: (Optional) ARN for the permissions boundary to use for Lambda roles
@@ -43,6 +47,12 @@ Conditions:
   PermissionBoundaryIsNull: !Equals [!Ref PermissionBoundaryARN, ""]
 
 Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Retain
+    Properties:
+      BucketName: ${S3BucketForSecretCache}
+
   LambdaS3AccessPolicyResource:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -61,6 +71,8 @@ Resources:
             Resource:
               - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}"
               - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}/*"
+              - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForSecretCache}"
+              - !Sub "arn:${AWS::Partition}:s3:::${S3BucketForSecretCache}/*"
       Description: Policy to allow Lambda to read S3 objects
       ManagedPolicyName: !Sub "${lambdaPrefix}-LambdaS3AccessPolicy"
       Path: /scv/
@@ -614,7 +626,7 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: "info"
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
+          SECRET_CACHE_S3: !Sub "${S3BucketForSecretCache}/secret_cache"
       Handler: handler.handler
       AutoPublishAlias: active
       VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
@@ -638,7 +650,7 @@ Resources:
         Variables:
           LOG_LEVEL: "info"
           INVOKE_TELEPHONY_INTEGRATION_API_ARN: !Ref MultiorgInvokeTelephonyIntegrationApiFunction
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
+          SECRET_CACHE_S3: !Sub "${S3BucketForSecretCache}/secret_cache"
       Handler: handler.handler
       Runtime: nodejs22.x
       Timeout: 10
@@ -659,7 +671,7 @@ Resources:
       Environment:
         Variables:
           LOG_LEVEL: "info"
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
+          SECRET_CACHE_S3: !Sub "${S3BucketForSecretCache}/secret_cache"
       Handler: handler.handler
       Runtime: nodejs22.x
       Timeout: 900
@@ -711,7 +723,7 @@ Resources:
           LOG_LEVEL: "info"
           USE_SECRET_LAMBDA_EXTENSION: false
           SECRETS_MANAGER_TTL: 60
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
+          SECRET_CACHE_S3: !Sub "${S3BucketForSecretCache}/secret_cache"
       Handler: handler.handler
       AutoPublishAlias: active
       VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
@@ -735,7 +747,7 @@ Resources:
         Variables:
           LOG_LEVEL: "info"
           CONTACT_LENS_PROCESSOR_FUNCTION_ARN: !GetAtt MultiorgContactLensProcessorFunction.Arn
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
+          SECRET_CACHE_S3: !Sub "${S3BucketForSecretCache}/secret_cache"
       Handler: handler.handler
       Runtime: nodejs22.x
       Timeout: 60
@@ -773,7 +785,7 @@ Resources:
         Variables:
           LOG_LEVEL: "info"
           INVOKE_TELEPHONY_INTEGRATION_API_ARN: !Ref MultiorgInvokeTelephonyIntegrationApiFunction
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
+          SECRET_CACHE_S3: !Sub "${S3BucketForSecretCache}/secret_cache"
       Handler: handler.handler
       AutoPublishAlias: active
       VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
@@ -788,7 +800,7 @@ Resources:
   MultiorgVoiceMailStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub "https://CUSTOMERDEFINEDS3BUCKETNAME.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/VoiceMailStack${Version}.yaml"
+      TemplateURL: !Sub "https://scv-multiorg-preprod.s3.${AWS::Region}.amazonaws.com/VoiceMailStack.yaml"
       Parameters:
         Version: !Ref Version
         VoiceMailAudioProcessingRole: !Ref MultiorgVoiceMailAudioProcessingRoleResource
@@ -829,7 +841,7 @@ Resources:
   MultiorgEventDisablerStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !Sub "https://CUSTOMERDEFINEDS3BUCKETNAME.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/MultiorgEventDisablerStack${Version}.yaml"
+      TemplateURL: !Sub "https://scv-multiorg-preprod.s3.${AWS::Region}.amazonaws.com/MultiorgEventDisablerStack.yaml"
       Parameters:
         ExistingCallCenterApiName: !Ref ExistingCallCenterApiName
         lambdaPrefix: !Ref lambdaPrefix
@@ -848,7 +860,7 @@ Resources:
       - MultiorgHandleContactEventsFunction
       - MultiorgContactLensConsumerFunction
     Properties:
-      TemplateURL: !Sub "https://CUSTOMERDEFINEDS3BUCKETNAME.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/RealtimeAlertStack${Version}.yaml"
+      TemplateURL: !Sub "https://scv-multiorg-preprod.s3.${AWS::Region}.amazonaws.com/RealtimeAlertStack.yaml"
       Parameters:
         InvokeSalesforceRestApiArn: !GetAtt MultiorgInvokeSalesforceRestApiFunction.Arn
         ConnectInstanceId: !Ref ConnectInstanceId
@@ -900,7 +912,7 @@ Resources:
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub "${lambdaPrefix}-S3SecretCacheTTL"
-      Runtime: python3.13
+      Runtime: python3.11
       Handler: index.lambda_handler
       Role: !GetAtt S3SecretCacheTTLRole.Arn
       Timeout: 60
@@ -977,7 +989,7 @@ Resources:
     Type: AWS::CloudFormation::CustomResource
     Properties:
       ServiceToken: !GetAtt S3SecretCacheTTLFunction.Arn
-      BucketName: !Ref S3BucketForTenantResources
+      BucketName: !Ref S3BucketForSecretCache
       TTLDays: 1
       Prefix: secret_cache/
 

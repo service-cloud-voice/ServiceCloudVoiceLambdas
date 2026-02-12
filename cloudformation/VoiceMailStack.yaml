@@ -46,7 +46,7 @@ Parameters:
 
 Conditions:
   Multiorg:
-    !Equals [ !Ref Multiorg, 'true' ]
+    !Equals [ !Ref Multiorg, 'TRUE' ]
 
 Outputs:
   VoiceMailAudioProcessingFunction:

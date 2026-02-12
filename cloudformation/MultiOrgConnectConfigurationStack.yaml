@@ -213,7 +213,7 @@ Resources:
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/*'
                   - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/*'
-                Sid: !Sub "${CallCenterApiName}SCVS3Sid"
+                Sid: "SCVS3Sid"
             Version: "2012-10-17"
           PolicyName: !Sub "${CallCenterApiName}-SCVS3Policy"
       RoleName: !Sub "${CallCenterApiName}-SCVS3Role"
