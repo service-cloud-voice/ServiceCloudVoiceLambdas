@@ -27,4 +27,4 @@ describe('transcriptUploader.processTranscript', () => {
     const result = await transcriptUploader.processTranscript('acct', payload, 'secret', 'access');
     expect(result).toEqual([]);
   });
-});
+}); 

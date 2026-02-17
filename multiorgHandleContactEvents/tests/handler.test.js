@@ -301,7 +301,7 @@ describe('MultiorgHandleContactEvents Lambda handler', () => {
       mockUtils.isDisconnectedEventForAbandonedCall.mockReturnValue(true);
       mockUtils.isRoutingCriteriaExpiredEventForCall.mockReturnValue(false);
       mockCacheUtils.retrieveFromCache.mockResolvedValue({ secretName });
-
+      
       // Create a promise that rejects, but handle the rejection to prevent Jest interference
       mockLambda.invoke.mockReturnValue({
         promise: jest.fn().mockImplementation(() => {
@@ -329,4 +329,4 @@ describe('MultiorgHandleContactEvents Lambda handler', () => {
       );
     });
   });
-});
+}); 

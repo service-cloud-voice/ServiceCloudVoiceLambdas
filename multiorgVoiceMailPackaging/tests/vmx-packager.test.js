@@ -53,12 +53,12 @@ describe("VoiceMailPackaging Tests", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-
+    
     // Setup default mocks
     mockLambdaInvoke.mockReturnValue({
       promise: jest.fn().mockResolvedValue({ StatusCode: 200 }),
     });
-
+    
     mockS3GetObjectTagging.mockReturnValue({
       promise: jest.fn().mockResolvedValue({
         TagSet: [
@@ -70,7 +70,7 @@ describe("VoiceMailPackaging Tests", () => {
         ],
       }),
     });
-
+    
     mockS3GetObject.mockReturnValue({
       promise: jest.fn().mockResolvedValue({
         Body: Buffer.from(JSON.stringify({
@@ -82,11 +82,11 @@ describe("VoiceMailPackaging Tests", () => {
         })),
       }),
     });
-
+    
     mockTranscribeDeleteJob.mockReturnValue({
       promise: jest.fn().mockResolvedValue({}),
     });
-
+    
     cacheUtils.retrieveFromCache.mockResolvedValue({ secretName: "test-secret" });
   });
 
@@ -94,7 +94,7 @@ describe("VoiceMailPackaging Tests", () => {
 
     it("should process .json files successfully", async () => {
       const result = await handler.handler(mockEvent);
-
+      
       expect(result).toHaveLength(5); // VM creation, sendMessage, routing, close VM, transcription deletion
       expect(mockS3GetObjectTagging).toHaveBeenCalledWith({
         Bucket: "test-bucket",
@@ -117,9 +117,9 @@ describe("VoiceMailPackaging Tests", () => {
           object: { key: "voicemail_transcripts/test-contact-123.wav" },
         },
       };
-
+      
       const result = await handler.handler(nonJsonEvent);
-
+      
       expect(result).toEqual({ success: true });
       expect(mockS3GetObjectTagging).not.toHaveBeenCalled();
     });
@@ -169,7 +169,7 @@ describe("VoiceMailPackaging Tests", () => {
         });
 
       const result = await handler.handler(mockEvent);
-
+      
       expect(result).toHaveLength(5); // VM creation, sendMessage, retry routing, close VM, transcription deletion
       expect(mockLambdaInvoke).toHaveBeenCalledTimes(5);
     });
@@ -194,14 +194,14 @@ describe("VoiceMailPackaging Tests", () => {
       });
 
       const result = await handler.handler(mockEvent);
-
+      
       expect(result).toHaveLength(5); // VM creation, sendMessage, final failed routing, close VM, transcription deletion
       expect(mockLambdaInvoke).toHaveBeenCalledTimes(7);
     });
 
     it("should handle cache retrieval success", async () => {
       await handler.handler(mockEvent);
-
+      
       expect(cacheUtils.retrieveFromCache).toHaveBeenCalledWith("test-contact-123");
       expect(mockLambdaInvoke).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -214,7 +214,7 @@ describe("VoiceMailPackaging Tests", () => {
       cacheUtils.retrieveFromCache.mockRejectedValue(new Error("Cache error"));
 
       await handler.handler(mockEvent);
-
+      
       expect(mockLambdaInvoke).toHaveBeenCalledWith(
         expect.objectContaining({
           Payload: expect.stringContaining('"secretName":null'),
@@ -226,7 +226,7 @@ describe("VoiceMailPackaging Tests", () => {
       cacheUtils.retrieveFromCache.mockResolvedValue(null);
 
       await handler.handler(mockEvent);
-
+      
       expect(mockLambdaInvoke).toHaveBeenCalledWith(
         expect.objectContaining({
           Payload: expect.stringContaining('"secretName":null'),
@@ -238,7 +238,7 @@ describe("VoiceMailPackaging Tests", () => {
       cacheUtils.retrieveFromCache.mockResolvedValue({ otherField: "value" });
 
       await handler.handler(mockEvent);
-
+      
       expect(mockLambdaInvoke).toHaveBeenCalledWith(
         expect.objectContaining({
           Payload: expect.stringContaining('"secretName":null'),

@@ -67,7 +67,7 @@ describe('cacheUtils', () => {
 
       // This test covers the S3 operation path without checking the exact result
       await cacheUtils.retrieveFromCache('valid-contact-id');
-
+      
       // Just verify the test executed without throwing an error
       expect(true).toBe(true);
     });
@@ -80,7 +80,7 @@ describe('cacheUtils', () => {
       });
 
       const result = await cacheUtils.retrieveFromCache('valid-contact-id');
-
+      
       expect(result).toBeNull();
     });
 
@@ -92,7 +92,7 @@ describe('cacheUtils', () => {
       });
 
       const result = await cacheUtils.retrieveFromCache('valid-contact-id');
-
+      
       expect(result).toBeNull();
     });
 
@@ -104,7 +104,7 @@ describe('cacheUtils', () => {
       });
 
       const result = await cacheUtils.retrieveFromCache('valid-contact-id');
-
+      
       expect(result).toBeNull();
     });
 
@@ -116,8 +116,8 @@ describe('cacheUtils', () => {
       });
 
       const result = await cacheUtils.retrieveFromCache('valid-contact-id');
-
+      
       expect(result).toBeNull();
     });
   });
-});
+}); 

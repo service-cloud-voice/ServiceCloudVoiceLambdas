@@ -7,9 +7,6 @@ import sys
 import os
 import coverage
 
-# Add the parent directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 def run_coverage_analysis():
     """Run tests with coverage analysis"""
     

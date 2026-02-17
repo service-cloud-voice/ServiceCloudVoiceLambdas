@@ -48,6 +48,9 @@ test {
 }
 
 dependencies {
+    implementation platform('io.netty:netty-bom:4.1.130.Final')
+    implementation group: 'commons-io', name: 'commons-io', version: '2.18.0'
+    implementation group: 'com.google.protobuf', name: 'protobuf-java', version: '3.25.8'
     implementation fileTree(dir: 'jars', include: '*.jar')
     implementation group: 'io.reactivex.rxjava2', name: 'rxjava', version: '2.2.21'
     implementation group: 'org.bouncycastle', name: 'bcprov-jdk15to18', version: '1.78'

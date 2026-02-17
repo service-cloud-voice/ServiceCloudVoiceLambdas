@@ -28,11 +28,11 @@ public class KVSTranscribeStreamingServiceTest {
 
     @Rule
     public final EnvironmentVariables environmentVariables = new EnvironmentVariables();
-
+    
     @Test
     void handleRequestTest() {
         runTest(buildTranscriptReq());
-    }
+    }        
 
     @Test
     void handleCustomRequestTest() {
@@ -41,7 +41,7 @@ public class KVSTranscribeStreamingServiceTest {
         request.setVocabularyFilterName("VocabFilterName");
         request.setVocabularyFilterMethod("MASK");
         runTest(request);
-    }
+    } 
 
     @Test
     void handleMedicalRequestTest() {
@@ -49,7 +49,7 @@ public class KVSTranscribeStreamingServiceTest {
         request.setEngine("medical");
         request.setSpecialty("ONCOLOGY");
         runTest(request);
-    }
+    }  
 
     private void runTest(TranscriptionRequest request) {
         try {
@@ -62,11 +62,11 @@ public class KVSTranscribeStreamingServiceTest {
                                      MockedStatic<AmazonCloudWatchClientBuilder> amazonCloudWatchClientBuilderMockedStatic = Mockito.mockStatic(AmazonCloudWatchClientBuilder.class);
                                      MockedStatic<KVSUtils> kvsUtilsMockedStatic = Mockito.mockStatic(KVSUtils.class);
                                      MockedStatic<ConfigManager> configManagerMockedStatic = Mockito.mockStatic(ConfigManager.class)) {
-
+                                    
                                     // Mock Regions
                                     regions = mock(Regions.class);
                                     regionsMockedStatic.when(() -> Regions.valueOf("US_EAST_1")).thenReturn(regions);
-
+                                    
                                     // Mock ConfigManager.getSecretConfig to prevent actual AWS calls
                                     ConfigManager.SecretConfig mockSecretConfig = mock(ConfigManager.SecretConfig.class);
                                     when(mockSecretConfig.getConfigValue("TRANSCRIBE_REGION")).thenReturn("us-east-1");
@@ -75,12 +75,12 @@ public class KVSTranscribeStreamingServiceTest {
                                     when(mockSecretConfig.getConfigValue("SCRT_ENDPOINT_BASE")).thenReturn("https://test.endpoint.com");
                                     when(mockSecretConfig.getConfigValue("test-api-name-scrt-jwt-auth-private-key")).thenReturn("-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7...\n-----END PRIVATE KEY-----");
                                     configManagerMockedStatic.when(() -> ConfigManager.getSecretConfig("test-secret-name")).thenReturn(mockSecretConfig);
-
+                                    
                                     Context context = new TestContext();
 
                                     AmazonCloudWatch amazonCloudWatch = mock(AmazonCloudWatch.class);
                                     amazonCloudWatchClientBuilderMockedStatic.when(() -> AmazonCloudWatchClientBuilder.defaultClient()).thenReturn(amazonCloudWatch);
-
+                                    
                                     KVSTranscribeStreamingService service = new KVSTranscribeStreamingService();
 
                                     InputStream inputStream = new InputStream() {
@@ -90,10 +90,10 @@ public class KVSTranscribeStreamingServiceTest {
                                         }
                                     };
                                     kvsUtilsMockedStatic.when(() -> KVSUtils.getInputStreamFromKVS(any(), any(), any(), any(), any())).thenReturn(inputStream);
-
+                                    
                                     String result = service.handleRequest(request, context);
-
-                                    // In KVSTranscribeStreamingService.java (line 125-129), the stream will not close during testing,
+                                    
+                                    // In KVSTranscribeStreamingService.java (line 125-129), the stream will not close during testing, 
                                     // so exception will be thrown and then failed the result. "result : Failed" is expected"
                                     assertTrue(result.contains("{ \"result\": \"Failed\" }"));
                                 }
@@ -103,7 +103,7 @@ public class KVSTranscribeStreamingServiceTest {
             System.out.println(e.getMessage());
         }
     }
-
+    
     private TranscriptionRequest buildTranscriptReq() {
         TranscriptionRequest request = new TranscriptionRequest();
         request.setAudioStartTimestamp("1599287207");

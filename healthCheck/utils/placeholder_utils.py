@@ -63,6 +63,11 @@ def resolve_conditional_options(option1: str, option2: str, replacements: Dict[s
     Returns:
         The resolved option string
     """
+    # Skip resolution for CustomerConfigured patterns - these should be handled by condition_evaluator
+    if ("CustomerConfigured" in option1 or "CustomerConfigured" in option2):
+        # Return the original conditional pattern for condition_evaluator to handle
+        return f"{option1}|{option2}"
+    
     # Check if either option contains LambdaPrefix/lambdaPrefix
     option1_has_lambda_prefix = ("${LambdaPrefix}" in option1 or "${lambdaPrefix}" in option1)
     option2_has_lambda_prefix = ("${LambdaPrefix}" in option2 or "${lambdaPrefix}" in option2)

@@ -5,4 +5,4 @@ module.exports = {
   secretCacheS3: process.env.SECRET_CACHE_S3,
   audience: 'https://scrt.salesforce.com',
   tokenValidFor: '5m',
-};
+}; 

@@ -8,12 +8,12 @@ const vendorFQN = "amazon-connect";
 async function persistSignals(contactId, payload) {
   const jwt = await utils.generateJWT();
   const scrtEndpoint = await axiosWrapper.getScrtEndpoint();
-
+  
   SCVLoggingUtil.info({
     message: "Persist Signal Request",
     context: { contactId: contactId, payload: payload },
   });
-
+  
   await scrtEndpoint
     .post(`/voiceCalls/${contactId}/postConversationEvents`, payload, {
       headers: {

@@ -8,7 +8,6 @@ from unittest.mock import patch, MagicMock
 
 # Import the module under test
 import sys
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
 
 from models.input_parser import parse_input_parameters
 from models.health_models import HealthCheckInput

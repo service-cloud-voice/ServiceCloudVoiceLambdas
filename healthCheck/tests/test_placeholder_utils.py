@@ -6,7 +6,6 @@ import pytest
 
 # Import the module under test
 import sys
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
 
 from utils.placeholder_utils import replace_placeholders, PLACEHOLDER_RE
 
@@ -471,3 +470,4 @@ class TestPlaceholderUtils:
         # Test with malformed placeholder
         result = replace_placeholders_in_string("${incomplete", {"incomplete": "value"})
         assert result == "${incomplete"  # Should remain unchanged
+

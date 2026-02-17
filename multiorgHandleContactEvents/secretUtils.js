@@ -20,7 +20,7 @@ async function readSecret(secretName) {
     if (!secretName) {
         throw new Error('Secret name is required');
     }
-
+    
     try {
         const secretResponse = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
         return JSON.parse(secretResponse.SecretString);
@@ -42,15 +42,15 @@ async function getSecretConfigs(secretName) {
     try {
         // Read secret data using generic function
         const secretData = await readSecret(secretName);
-
+        
         // Build configuration from secret data (specific to this lambda)
         const orgId = secretData[CONFIG_KEYS.SALESFORCE_ORG_ID];
         const endpointBase = secretData[CONFIG_KEYS.SCRT_ENDPOINT_BASE];
         const callCenterApiName = secretData[CONFIG_KEYS.CALL_CENTER_API_NAME];
-
+        
         const privateKeyParam = `${callCenterApiName}-scrt-jwt-auth-private-key`;
         const privateKey = secretData[privateKeyParam];
-
+        
         const configData = {
             audience: config.audience,
             orgId: orgId,
@@ -59,7 +59,7 @@ async function getSecretConfigs(secretName) {
             privateKey,
             tokenValidFor: config.tokenValidFor
         };
-
+        
         return configData;
     } catch (error) {
         SCVLoggingUtil.error({
@@ -74,4 +74,4 @@ module.exports = {
     readSecret,
     getSecretConfigs,
     CONFIG_KEYS
-};
+}; 

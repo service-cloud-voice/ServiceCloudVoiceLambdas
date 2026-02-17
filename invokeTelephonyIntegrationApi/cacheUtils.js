@@ -31,7 +31,7 @@ async function retrieveFromCache(contactId) {
   try {
     const data = await s3.getObject(params).promise();
     const body = data.Body.toString('utf-8');
-    const parsedData = JSON.parse(body);
+    const parsedData = JSON.parse(body);  
     return parsedData;
   } catch (err) {
     if (err.code === 'NoSuchKey' || err.code === 'NotFound') {
@@ -95,4 +95,4 @@ async function storeInCache(contactId, cacheData) {
 module.exports = {
   retrieveFromCache,
   storeInCache,
-};
+}; 

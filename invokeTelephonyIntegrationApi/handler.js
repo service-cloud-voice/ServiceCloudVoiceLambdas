@@ -67,22 +67,22 @@ exports.handler = async (event) => {
   const { methodName, fieldValues, contactId } = event.Details.Parameters;
   const contactIdValue = contactId || event.Details.ContactData.ContactId;
   const callOrigin = event.Details.ContactData?.Attributes?.callOrigin || "";
-
+  
   // Extract secret name from call attributes with precedence over environment variable
   const secretNameFromAttributes = event.Details.ContactData?.Attributes?.secretName ||  event.Details.Parameters?.fieldValues?.secretName  || null;
   const accessSecretNameFromAttributes = event.Details.ContactData?.Attributes?.accessSecretName ||  event.Details.Parameters?.fieldValues?.accessSecretName || null;
 
   SCVLoggingUtil.debug({
     message: `Invoke ${methodName} request with ${contactIdValue}`,
-    context: {
-      contactId: contactIdValue,
+    context: { 
+      contactId: contactIdValue, 
       payload: fieldValues,
       methodName: methodName,
       secretSource: secretNameFromAttributes ? 'callAttributes' : 'environment',
       accessSecretSource: accessSecretNameFromAttributes ? 'callAttributes' : 'environment'
     },
   });
-
+  
   // Determine the resolved secret name used (attributes takes precedence over environment)
   const resolvedSecretName = secretNameFromAttributes || config.secretName;
   if (!resolvedSecretName) {
@@ -122,7 +122,7 @@ exports.handler = async (event) => {
         context: { contactId: contactIdValue, payload: voiceCallFieldValues },
       });
       result = await api.createVoiceCall(voiceCallFieldValues, configData);
-
+      
       break;
     case "updateVoiceCall":
       fieldValues.callCenterApiName = configData.callCenterApiName;
@@ -147,7 +147,7 @@ exports.handler = async (event) => {
           },
         ],
       };
-      if (callOrigin) {
+      if (callOrigin) { 
         voiceCallFieldValues.callOrigin = callOrigin;
       }
       if (event.Details.ContactData.Queue) {
@@ -227,6 +227,19 @@ exports.handler = async (event) => {
         };
       }
       break;
+    case "getJwtToken":
+      const jwt = await utils.generateJWT({
+        orgId: configData.orgId,
+        callCenterApiName: configData.callCenterApiName,
+        expiresIn: configData.tokenValidFor,
+        privateKey: configData.privateKey,
+      });
+      result = {
+        statusCode: 200,
+        message: "JWT token generated successfully",
+        token: jwt,
+      };
+      break;
     default:
       SCVLoggingUtil.warn({
         message: `Unsupported method ${methodName}`,
@@ -249,10 +262,10 @@ exports.handler = async (event) => {
       voiceCallId: result.voiceCallId
     };
     await cacheUtils.storeInCache(contactIdValue, cacheData);
-
+    
     SCVLoggingUtil.debug({
       message: `Cache data stored for contact ${contactIdValue}`,
-      context: {
+      context: { 
         contactId: contactIdValue,
         voiceCallId: result.voiceCallId,
         secretName: secretNameFromAttributes,

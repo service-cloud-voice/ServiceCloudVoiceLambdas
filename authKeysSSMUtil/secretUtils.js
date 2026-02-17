@@ -86,4 +86,4 @@ async function writeSecret(secretName, secretValue) {
 module.exports = {
   readSecret,
   writeSecret
-};
+}; 

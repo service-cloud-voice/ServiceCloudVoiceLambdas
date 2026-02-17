@@ -143,3 +143,136 @@ def resolve_dynamic_stream_references(event_source: str, discovered_streams: Dic
     # For non-dynamic references, return as-is
     debug(f"No dynamic reference found, returning as-is: {event_source}")
     return event_source
+
+
+def discover_connect_s3_storage(connect_instance_id: str, region: str = None) -> Dict[str, Optional[str]]:
+    """
+    Discover S3 storage configurations from Connect instance (optimized for S3 validation only).
+    
+    Args:
+        connect_instance_id: The Connect instance ID
+        region: AWS region (optional)
+        
+    Returns:
+        Dict containing discovered S3 storage configurations:
+        {
+            'call_recordings_s3_bucket': 'bucket-name',
+            'chat_transcripts_s3_bucket': 'bucket-name'
+        }
+    """
+    try:
+        # Create Connect client with region if provided
+        if region:
+            connect_client = boto3.client('connect', region_name=region)
+        else:
+            connect_client = boto3.client('connect')
+        
+        # Discover S3 storage configurations only (no streams)
+        call_recordings_bucket = _discover_s3_storage(connect_client, connect_instance_id, 'CALL_RECORDINGS')
+        chat_transcripts_bucket = _discover_s3_storage(connect_client, connect_instance_id, 'CHAT_TRANSCRIPTS')
+        
+        result = {
+            'call_recordings_s3_bucket': call_recordings_bucket,
+            'chat_transcripts_s3_bucket': chat_transcripts_bucket
+        }
+        
+        info(f"S3 storage discovery completed: CallRecordings={call_recordings_bucket is not None}, ChatTranscripts={chat_transcripts_bucket is not None}")
+        debug(f"Discovered S3 storage: {result}")
+        
+        return result
+        
+    except Exception as e:
+        fail(f"S3 storage discovery failed: {str(e)}")
+        return {
+            'call_recordings_s3_bucket': None,
+            'chat_transcripts_s3_bucket': None
+        }
+
+
+def discover_connect_storage(connect_instance_id: str, region: str = None) -> Dict[str, Optional[str]]:
+    """
+    Discover actual storage configurations from Connect instance.
+    
+    Args:
+        connect_instance_id: The Connect instance ID
+        region: AWS region (optional)
+        
+    Returns:
+        Dict containing discovered storage configurations:
+        {
+            'ctr_stream_arn': 'arn:aws:kinesis:...',
+            'contact_lens_stream_arn': 'arn:aws:kinesis:...',
+            'call_recordings_s3_bucket': 'bucket-name',
+            'chat_transcripts_s3_bucket': 'bucket-name'
+        }
+    """
+    try:
+        # Create Connect client with region if provided
+        if region:
+            connect_client = boto3.client('connect', region_name=region)
+        else:
+            connect_client = boto3.client('connect')
+        
+        # Discover stream configurations
+        ctr_stream_arn = _discover_ctr_stream(connect_client, connect_instance_id)
+        contact_lens_stream_arn = _discover_contact_lens_stream(connect_client, connect_instance_id)
+        
+        # Discover S3 storage configurations
+        call_recordings_bucket = _discover_s3_storage(connect_client, connect_instance_id, 'CALL_RECORDINGS')
+        chat_transcripts_bucket = _discover_s3_storage(connect_client, connect_instance_id, 'CHAT_TRANSCRIPTS')
+        
+        result = {
+            'ctr_stream_arn': ctr_stream_arn,
+            'contact_lens_stream_arn': contact_lens_stream_arn,
+            'call_recordings_s3_bucket': call_recordings_bucket,
+            'chat_transcripts_s3_bucket': chat_transcripts_bucket
+        }
+        
+        info(f"Storage discovery completed: CTR={ctr_stream_arn is not None}, ContactLens={contact_lens_stream_arn is not None}, CallRecordings={call_recordings_bucket is not None}, ChatTranscripts={chat_transcripts_bucket is not None}")
+        debug(f"Discovered storage: {result}")
+        
+        return result
+        
+    except Exception as e:
+        fail(f"Storage discovery failed: {str(e)}")
+        return {
+            'ctr_stream_arn': None,
+            'contact_lens_stream_arn': None,
+            'call_recordings_s3_bucket': None,
+            'chat_transcripts_s3_bucket': None
+        }
+
+
+def _discover_s3_storage(connect_client, connect_instance_id: str, resource_type: str) -> Optional[str]:
+    """
+    Discover S3 bucket configuration for a specific resource type.
+    
+    Args:
+        connect_client: Boto3 Connect client
+        connect_instance_id: Connect instance ID
+        resource_type: 'CALL_RECORDINGS' or 'CHAT_TRANSCRIPTS'
+        
+    Returns:
+        S3 bucket name if found, None otherwise
+    """
+    try:
+        debug(f"Discovering S3 storage for {resource_type} in instance: {connect_instance_id}")
+        
+        response = connect_client.list_instance_storage_configs(
+            InstanceId=connect_instance_id,
+            ResourceType=resource_type
+        )
+        
+        if 'StorageConfigs' in response and response['StorageConfigs']:
+            for config in response['StorageConfigs']:
+                if config['StorageType'] == 'S3':
+                    bucket_name = config['S3Config']['BucketName']
+                    debug(f"Found {resource_type} S3 bucket: {bucket_name}")
+                    return bucket_name
+        
+        debug(f"No {resource_type} S3 storage configuration found")
+        return None
+        
+    except ClientError as e:
+        fail(f"Failed to discover {resource_type} S3 storage: {e}")
+        return None

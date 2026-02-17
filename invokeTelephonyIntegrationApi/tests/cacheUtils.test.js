@@ -29,12 +29,12 @@ describe("cacheUtils", () => {
     const contactId = "test-contact-123";
 
     it("should successfully retrieve cache from S3 with directory", async () => {
-      const mockCacheData = {
-        secretName: "test-secret",
+      const mockCacheData = { 
+        secretName: "test-secret", 
         accessToken: "test-token",
         timestamp: "2023-01-01T00:00:00Z"
       };
-
+      
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.resolve({
           Body: Buffer.from(JSON.stringify(mockCacheData))
@@ -53,7 +53,7 @@ describe("cacheUtils", () => {
     it("should return null when cache not found (NoSuchKey)", async () => {
       const error = new Error("Not found");
       error.code = "NoSuchKey";
-
+      
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.reject(error)
       });
@@ -70,7 +70,7 @@ describe("cacheUtils", () => {
     it("should return null when cache not found (NotFound)", async () => {
       const error = new Error("Not found");
       error.code = "NotFound";
-
+      
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.reject(error)
       });
@@ -87,7 +87,7 @@ describe("cacheUtils", () => {
     it("should handle S3 errors and return null", async () => {
       const error = new Error("S3 Error");
       error.code = "AccessDenied";
-
+      
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.reject(error)
       });
@@ -120,9 +120,9 @@ describe("cacheUtils", () => {
 
   describe("storeInCache", () => {
     const contactId = "test-contact-123";
-    const cacheData = {
-      secretName: "test-secret",
-      accessToken: "test-token"
+    const cacheData = { 
+      secretName: "test-secret", 
+      accessToken: "test-token" 
     };
 
     it("should successfully store cache in S3 with directory", async () => {
@@ -147,7 +147,7 @@ describe("cacheUtils", () => {
 
     it("should handle S3 errors and return false", async () => {
       const error = new Error("S3 Put Error");
-
+      
       mockS3.putObject.mockReturnValue({
         promise: () => Promise.reject(error)
       });
@@ -162,3 +162,5 @@ describe("cacheUtils", () => {
     });
   });
 });
+
+ 

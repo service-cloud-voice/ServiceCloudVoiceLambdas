@@ -119,7 +119,7 @@ describe('transformCTR', () => {
     it('should default to UNKNOWN reason for disconnect if null', () => {
         expect(actual4).toStrictEqual(expected4);
     });
-
+      
     it('should set disconnectReason to CALLBACK and isError to false when callback_flag is set', () => {
         const input = {
             ContactId: "cb-flag-test-1",
@@ -256,7 +256,7 @@ describe('getCallAttributes', () => {
         "sfc-field4":"field4",
         "field5":"field5"
     };
-
+    
     let expected3 = {};
     it('call attributes should be empty as none of the attributes start with sfdc-', () => {
         expect(utils.getCallAttributes(input3)).toStrictEqual(expected3);

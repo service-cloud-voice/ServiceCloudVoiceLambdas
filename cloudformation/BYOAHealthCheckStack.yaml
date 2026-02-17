@@ -131,6 +131,13 @@ Resources:
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-KvsTranscriberRole"
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/${LambdaPrefix}-LambdaS3AccessPolicy"
             Effect: Allow
+          # Permission to read permission boundary policies attached to roles
+          - Action:
+              - iam:GetPolicy
+              - iam:GetPolicyVersion
+            Resource:
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/*"
+            Effect: Allow
           - Action:
               - lambda:GetFunction
               - lambda:GetFunctionConfiguration
@@ -234,6 +241,8 @@ Resources:
               - Action:
                   - iam:GetRole
                   - iam:ListAttachedRolePolicies
+                  - iam:ListRolePolicies
+                  - iam:GetRolePolicy
                   - iam:GetPolicy
                   - iam:GetPolicyVersion
                   - iam:SimulatePrincipalPolicy
@@ -270,24 +279,8 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*HandleContactEventsRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*HealthCheckLambdaExecutionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVUpdateCredentialRole"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVHealthCheckAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/HealthCheckAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVSecretsManagerAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SecretsManagerAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVSSMAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SSMAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVLambdaAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/LambdaAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVKinesisDataStreamAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/KinesisDataStreamAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVKMSAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/KMSAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVAmazonConnectAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/AmazonConnectAccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVS3AccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/S3AccessPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVS3ManagedPolicy"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/S3ManagedPolicy"
+                  # Wildcard for all policies - covers SCV managed policies and permission boundaries
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/*"
                 Effect: Allow
               - Action:
                   - lambda:GetFunction

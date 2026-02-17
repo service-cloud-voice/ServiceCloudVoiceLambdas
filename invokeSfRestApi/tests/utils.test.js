@@ -13,7 +13,7 @@ const uuid = require('uuid');
 // });
 // const generateJWT = rewiredUtils.__get__('generateJWT');
 
-afterEach(() => {
+afterEach(() => {    
   jest.clearAllMocks();
 });
 

@@ -100,14 +100,14 @@ exports.handler = async (event) => {
       var contactIds = secretNameToContactIdMap[secretName];
       // here we are making sure that we are first getting secretName and then grouping contactIds associated with that secretName.
       for (var key of contactIds) {
-      const bulkSendMessagePayload = {};
-      bulkSendMessagePayload.vendorCallKey = key;
-      bulkSendMessagePayload.messages = contactIdToMessagesMap[key];
+        const bulkSendMessagePayload = {};
+        bulkSendMessagePayload.vendorCallKey = key;
+        bulkSendMessagePayload.messages = contactIdToMessagesMap[key];
 
-      // Add to the bulkSendMessagesPayload.entries array
-      bulkSendMessagesPayload.secretName = secretName
-      bulkSendMessagesPayload.entries.push(bulkSendMessagePayload);
-    }
+        // Add to the bulkSendMessagesPayload.entries array
+        bulkSendMessagesPayload.secretName = secretName
+        bulkSendMessagesPayload.entries.push(bulkSendMessagePayload);
+      }
     }
 
     SCVLoggingUtil.debug({

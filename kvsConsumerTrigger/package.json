@@ -9,7 +9,7 @@
     "winston": "3.2.1"
   },
   "devDependencies": {
-    "jest": "28.1.0"
+    "jest": "28.1.3"
   },
   "scripts": {
     "test": "jest --collect-coverage"

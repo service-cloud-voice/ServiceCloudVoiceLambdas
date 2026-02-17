@@ -2,21 +2,16 @@
 Tests for the main lambda handler function
 """
 
+import os
 import pytest
 import json
-import os
 from unittest.mock import patch, MagicMock
-
-# Import the module under test
-import sys
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
-
-from healthcheck import lambda_handler
-
+from moto import mock_aws
 
 class TestLambdaHandler:
     """Test cases for the main lambda_handler function"""
 
+    @mock_aws
     @patch('healthcheck.setup_logging')
     @patch('healthcheck.get_logger')
     @patch('healthcheck.upload_report_to_s3')
@@ -30,6 +25,7 @@ class TestLambdaHandler:
                                    mock_generate_report, mock_upload_s3, 
                                    mock_get_logger, mock_setup_logging):
         """Test successful lambda handler execution"""
+        import healthcheck
         
         # Mock logger
         mock_logger = MagicMock()
@@ -89,7 +85,7 @@ class TestLambdaHandler:
         context = MagicMock()
         
         # Execute
-        result = lambda_handler(event, context)
+        result = healthcheck.lambda_handler(event, context)
         
         # Verify response
         assert result["statusCode"] == 200
@@ -106,6 +102,7 @@ class TestLambdaHandler:
         assert "detailed_results" in body
         assert "errors" in body
 
+    @mock_aws
     @patch('healthcheck.setup_logging')
     @patch('healthcheck.get_logger')
     @patch('healthcheck.is_debug_enabled')
@@ -121,6 +118,7 @@ class TestLambdaHandler:
                                               mock_is_debug_enabled, mock_get_logger, 
                                               mock_setup_logging):
         """Test lambda handler with debug mode enabled"""
+        import healthcheck
         
         # Enable debug mode
         mock_is_debug_enabled.return_value = True
@@ -166,12 +164,13 @@ class TestLambdaHandler:
         
         event = {}  # Empty event since all config from env vars
         
-        result = lambda_handler(event, MagicMock())
+        result = healthcheck.lambda_handler(event, MagicMock())
         
         # Verify execution time is included when debug is enabled
         body = json.loads(result["body"])
         assert "execution_time_ms" in body
 
+    @mock_aws
     @patch('healthcheck.setup_logging')
     @patch('healthcheck.get_logger')
     @patch('healthcheck.fail')
@@ -179,6 +178,7 @@ class TestLambdaHandler:
     def test_lambda_handler_parse_error(self, mock_parse_input, mock_fail, 
                                        mock_get_logger, mock_setup_logging):
         """Test lambda handler with input parsing error"""
+        import healthcheck
         
         # Mock logger
         mock_logger = MagicMock()
@@ -190,7 +190,7 @@ class TestLambdaHandler:
         event = {}
         context = MagicMock()
         
-        result = lambda_handler(event, context)
+        result = healthcheck.lambda_handler(event, context)
         
         # Verify error response
         assert result["statusCode"] == 500
@@ -201,6 +201,7 @@ class TestLambdaHandler:
         assert "Health check failed:" in body["error"]
         assert "execution_id" in body
 
+    @mock_aws
     @patch('healthcheck.setup_logging')
     @patch('healthcheck.get_logger')
     @patch('healthcheck.upload_report_to_s3')
@@ -214,6 +215,7 @@ class TestLambdaHandler:
                                              mock_generate_report, mock_upload_s3,
                                              mock_get_logger, mock_setup_logging):
         """Test lambda handler when S3 upload fails"""
+        import healthcheck
         
         # Mock logger
         mock_logger = MagicMock()
@@ -258,7 +260,7 @@ class TestLambdaHandler:
         
         event = {}
         
-        result = lambda_handler(event, MagicMock())
+        result = healthcheck.lambda_handler(event, MagicMock())
         
         # Should still return success but with S3 upload failure status
         assert result["statusCode"] == 200
@@ -267,6 +269,7 @@ class TestLambdaHandler:
         assert body["s3_report"]["status"] == "failed"
         assert "error" in body["s3_report"]
 
+    @mock_aws
     @patch.dict(os.environ, {
         'VERSION': '19.0',
         'CALL_CENTER_API_NAME': 'TestCC',
@@ -281,6 +284,7 @@ class TestLambdaHandler:
     def test_lambda_handler_missing_arn_components(self, mock_parse_input_parameters, 
                                                  mock_get_logger, mock_setup_logging):
         """Test lambda_handler with missing ARN components."""
+        import healthcheck
         # Mock logger
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
@@ -296,12 +300,13 @@ class TestLambdaHandler:
         event = {"test": "event"}
         context = MagicMock()
         
-        result = lambda_handler(event, context)
+        result = healthcheck.lambda_handler(event, context)
         
         # Should return error response
         assert result["statusCode"] == 500
         assert "Invalid ARN components extracted" in result["body"]
 
+    @mock_aws
     @patch.dict(os.environ, {
         'VERSION': '19.0',
         'CALL_CENTER_API_NAME': 'TestCC',
@@ -324,6 +329,7 @@ class TestLambdaHandler:
                                                 mock_replace_placeholders, mock_load_expected_from_layer,
                                                 mock_parse_input_parameters, mock_get_logger, mock_setup_logging):
         """Test lambda_handler with errors and debug enabled."""
+        import healthcheck
         # Mock logger
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
@@ -370,7 +376,7 @@ class TestLambdaHandler:
         event = {"test": "event"}
         context = MagicMock()
         
-        result = lambda_handler(event, context)
+        result = healthcheck.lambda_handler(event, context)
         
         # Verify warning was logged for error_count > 0
         mock_logger.warning.assert_called_with("Errors: 3")
@@ -382,3 +388,205 @@ class TestLambdaHandler:
         assert "errors" in body
         assert body["s3_report"]["status"] == "failed"
         assert "execution_time_ms" in body  # Should include when debug enabled
+
+    @mock_aws
+    @patch('healthcheck.setup_logging')
+    @patch('healthcheck.get_logger')
+    @patch('healthcheck.upload_report_to_s3')
+    @patch('healthcheck.generate_enhanced_report')
+    @patch('healthcheck.MultiThreadedValidator')
+    @patch('healthcheck.replace_placeholders')
+    @patch('healthcheck.load_expected_from_layer')
+    @patch('healthcheck.parse_input_parameters')
+    @patch('utils.stream_discovery.discover_connect_streams')
+    @patch('utils.stream_discovery.resolve_dynamic_stream_references')
+    def test_lambda_handler_multiorg_stream_discovery(self, mock_resolve_streams, mock_discover_streams,
+                                                     mock_parse_input, mock_load_config, 
+                                                     mock_replace_placeholders, mock_validator_class, 
+                                                     mock_generate_report, mock_upload_s3, 
+                                                     mock_get_logger, mock_setup_logging):
+        """Test lambda handler with multiorg SKU and stream discovery"""
+        import healthcheck
+
+        # Mock logger
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+        
+        # Mock parsed input for multiorg
+        mock_health_input = MagicMock()
+        mock_health_input.execution_id = "exec-123-456"
+        mock_health_input.cc_version = "19.0"
+        mock_health_input.sku = "multiorg"  # This triggers stream discovery
+        mock_health_input.cc_name = "ServiceCloudVoice"
+        mock_health_input.region = "us-west-2"
+        mock_health_input.connect_instance_id = "12345678-1234-1234-1234-123456789012"
+        mock_health_input.account_id = "123456789012"
+        mock_health_input.partition = "aws"
+        mock_health_input.call_center_api_name = "ServiceCloudVoice"
+        mock_health_input.s3_bucket_for_tenant_resources = "tenant-bucket"
+        mock_health_input.lambda_prefix = "MyOrg"
+        mock_health_input.include_detailed_errors = True
+        mock_parse_input.return_value = mock_health_input
+        
+        # Mock configuration with EventSourceMappings
+        mock_config_raw = {
+            "LambdaFunctions": [{"name": "TestFunction"}],
+            "EventSourceMappings": [{
+                "function": "TestFunction",
+                "event_source": "MultiorgStreamDiscoveryCustomResource-CTR"
+            }]
+        }
+        mock_load_config.return_value = mock_config_raw
+        
+        mock_config_processed = {
+            "LambdaFunctions": [{"name": "MyOrgTestFunction"}],
+            "EventSourceMappings": [{
+                "function": "MyOrgTestFunction", 
+                "event_source": "MultiorgStreamDiscoveryCustomResource-CTR"
+            }]
+        }
+        mock_replace_placeholders.return_value = mock_config_processed
+        
+        # Mock stream discovery
+        mock_discovered_streams = {
+            "ctr_stream_arn": "arn:aws:kinesis:us-west-2:123456789012:stream/ctr-stream",
+            "cl_stream_arn": "arn:aws:kinesis:us-west-2:123456789012:stream/cl-stream"
+        }
+        mock_discover_streams.return_value = mock_discovered_streams
+        mock_resolve_streams.return_value = "arn:aws:kinesis:us-west-2:123456789012:stream/ctr-stream"
+        
+        # Mock validator
+        mock_validator = MagicMock()
+        mock_full_report = [{"ResourceType": "Test", "DetailedHealthCheck": []}]
+        mock_validator.validate_all_resources_parallel.return_value = mock_full_report
+        mock_validator.errors = []
+        mock_validator_class.return_value = mock_validator
+        
+        # Mock enhanced report
+        mock_enhanced_report = {
+            "summary": {
+                "overall_status": "HEALTHY",
+                "total_resources": 1,
+                "healthy": 1,
+                "unhealthy": 0,
+                "error_count": 0
+            }
+        }
+        mock_generate_report.return_value = mock_enhanced_report
+        
+        # Mock S3 upload
+        mock_upload_s3.return_value = "s3://tenant-bucket/health_report/exec-123-456.json"
+        
+        # Test event
+        event = {
+            "execution_id": "exec-123-456",
+            "include_detailed_errors": True
+        }
+        
+        context = MagicMock()
+        
+        # Execute
+        result = healthcheck.lambda_handler(event, context)
+        
+        # Verify stream discovery was called
+        mock_discover_streams.assert_called_once_with("12345678-1234-1234-1234-123456789012", "us-west-2")
+        mock_resolve_streams.assert_called_once_with("MultiorgStreamDiscoveryCustomResource-CTR", mock_discovered_streams)
+        
+        # Verify response
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["overall_status"] == "HEALTHY"
+
+    @mock_aws
+    @patch('healthcheck.setup_logging')
+    @patch('healthcheck.get_logger')
+    @patch('healthcheck.upload_report_to_s3')
+    @patch('healthcheck.generate_enhanced_report')
+    @patch('healthcheck.MultiThreadedValidator')
+    @patch('healthcheck.replace_placeholders')
+    @patch('healthcheck.load_expected_from_layer')
+    @patch('healthcheck.parse_input_parameters')
+    @patch('utils.stream_discovery.discover_connect_streams')
+    @patch('utils.stream_discovery.resolve_dynamic_stream_references')
+    def test_lambda_handler_multiorg_no_event_mappings(self, mock_resolve_streams, mock_discover_streams,
+                                                      mock_parse_input, mock_load_config, 
+                                                      mock_replace_placeholders, mock_validator_class, 
+                                                      mock_generate_report, mock_upload_s3, 
+                                                      mock_get_logger, mock_setup_logging):
+        """Test lambda handler with multiorg SKU but no EventSourceMappings"""
+        import healthcheck
+
+        # Mock logger
+        mock_logger = MagicMock()
+        mock_get_logger.return_value = mock_logger
+        
+        # Mock parsed input for multiorg
+        mock_health_input = MagicMock()
+        mock_health_input.execution_id = "exec-123-456"
+        mock_health_input.cc_version = "19.0"
+        mock_health_input.sku = "multiorg"  # This triggers stream discovery
+        mock_health_input.cc_name = "ServiceCloudVoice"
+        mock_health_input.region = "us-west-2"
+        mock_health_input.connect_instance_id = "12345678-1234-1234-1234-123456789012"
+        mock_health_input.account_id = "123456789012"
+        mock_health_input.partition = "aws"
+        mock_health_input.call_center_api_name = "ServiceCloudVoice"
+        mock_health_input.s3_bucket_for_tenant_resources = "tenant-bucket"
+        mock_health_input.lambda_prefix = "MyOrg"
+        mock_health_input.include_detailed_errors = True
+        mock_parse_input.return_value = mock_health_input
+        
+        # Mock configuration WITHOUT EventSourceMappings
+        mock_config_raw = {
+            "LambdaFunctions": [{"name": "TestFunction"}]
+            # No EventSourceMappings key
+        }
+        mock_load_config.return_value = mock_config_raw
+        
+        mock_config_processed = {
+            "LambdaFunctions": [{"name": "MyOrgTestFunction"}]
+        }
+        mock_replace_placeholders.return_value = mock_config_processed
+        
+        # Mock stream discovery
+        mock_discovered_streams = {
+            "ctr_stream_arn": "arn:aws:kinesis:us-west-2:123456789012:stream/ctr-stream"
+        }
+        mock_discover_streams.return_value = mock_discovered_streams
+        
+        # Mock validator
+        mock_validator = MagicMock()
+        mock_full_report = [{"ResourceType": "Test", "DetailedHealthCheck": []}]
+        mock_validator.validate_all_resources_parallel.return_value = mock_full_report
+        mock_validator.errors = []
+        mock_validator_class.return_value = mock_validator
+        
+        # Mock enhanced report
+        mock_enhanced_report = {
+            "summary": {
+                "overall_status": "HEALTHY",
+                "total_resources": 1,
+                "healthy": 1,
+                "unhealthy": 0,
+                "error_count": 0
+            }
+        }
+        mock_generate_report.return_value = mock_enhanced_report
+        
+        # Mock S3 upload
+        mock_upload_s3.return_value = "s3://tenant-bucket/health_report/exec-123-456.json"
+        
+        # Test event
+        event = {"execution_id": "exec-123-456"}
+        context = MagicMock()
+        
+        # Execute
+        result = healthcheck.lambda_handler(event, context)
+        
+        # Verify stream discovery was called
+        mock_discover_streams.assert_called_once_with("12345678-1234-1234-1234-123456789012", "us-west-2")
+        
+        # Verify response
+        assert result["statusCode"] == 200
+        body = json.loads(result["body"])
+        assert body["overall_status"] == "HEALTHY"

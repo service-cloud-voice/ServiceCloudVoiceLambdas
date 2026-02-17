@@ -55,12 +55,12 @@ class MultiThreadedValidator:
         
         # Create validation tasks - each task is a function call
         validation_tasks = [
-            ("roles", lambda: validate_roles(self.config)),
+            ("roles", lambda: validate_roles(self.config, self.health_input)),
             ("lambdas", lambda: validate_lambdas(self.config, self.health_input)),
             ("layers", lambda: validate_layers(self.config)),
             ("policies", lambda: validate_policies(self.config)),
             ("alarms", lambda: validate_alarms(self.config)),
-            ("s3", lambda: validate_s3(self.config)),
+            ("s3", lambda: validate_s3(self.config, self.health_input)),
             ("kinesis", lambda: validate_kinesis(self.config)),
             ("kms_aliases", lambda: validate_kms_aliases(self.config)),
             ("triggers", lambda: validate_triggers_by_lambda_policy(self.config, all_lambda_names)),

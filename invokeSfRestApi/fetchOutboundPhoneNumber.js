@@ -52,19 +52,19 @@ function getSerializableError(error) {
 
 async function getMessagingPlatformKey(agentARN, secretName, accessTokenSecretName) {
   const configs = await secretUtils.getSecretConfigs(secretName);
-  const qry = `SELECT MessagingPlatformKey
+  const qry = `SELECT MessagingPlatformKey 
                     FROM MessagingChannel
-                    WHERE MessageType='Voice'
+                    WHERE MessageType='Voice' 
                       AND IsActive = true
-                      AND Id in
-                          (SELECT ChannelId
-                           FROM ContactCenterChannel
+                      AND Id in 
+                          (SELECT ChannelId 
+                           FROM ContactCenterChannel 
                            WHERE ContactCenterChannel.ContactCenter.InternalName='${configs.callCenterApiName}')
-                      AND SessionHandlerId in
-                          (SELECT ReferenceRecordId
-                           FROM CallCenterRoutingMap
+                      AND SessionHandlerId in 
+                          (SELECT ReferenceRecordId 
+                           FROM CallCenterRoutingMap 
                            WHERE ExternalId='${agentARN}'
-                           )
+                           ) 
                     LIMIT 1`;
 
   let results;

@@ -34,7 +34,7 @@ jest.mock('aws-sdk', () => {
     };
 });
 
-afterEach(() => {
+afterEach(() => {    
   jest.clearAllMocks();
 });
 

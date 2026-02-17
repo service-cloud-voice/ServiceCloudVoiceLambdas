@@ -21,7 +21,7 @@ describe("axiosWrapper", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     delete process.env.LOG_LEVEL;
-
+    
     // Reset axios instance mock
     mockAxios.create.mockReturnValue({
       interceptors: {
@@ -62,7 +62,7 @@ describe("axiosWrapper", () => {
 
     it("should add logging interceptors when LOG_LEVEL is debug", () => {
       process.env.LOG_LEVEL = "debug";
-
+      
       const mockInstance = {
         interceptors: {
           request: { use: jest.fn() },
@@ -97,7 +97,7 @@ describe("axiosWrapper", () => {
 
     it("should handle LOG_LEVEL case variations", () => {
       process.env.LOG_LEVEL = "DEBUG"; // uppercase
-
+      
       const mockInstance = {
         interceptors: {
           request: { use: jest.fn() },
@@ -137,4 +137,4 @@ describe("axiosWrapper", () => {
       });
     });
   });
-});
+}); 

@@ -58,4 +58,4 @@ describe('getScrtEndpoint', () => {
       logger.errorLogger
     );
   });
-});
+}); 

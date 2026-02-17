@@ -7,10 +7,6 @@ import sys
 import os
 import traceback
 
-# Add the parent directory to Python path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
 def run_basic_tests():
     """Run basic functionality tests"""
     tests_passed = 0

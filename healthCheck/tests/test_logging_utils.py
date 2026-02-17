@@ -9,7 +9,6 @@ from io import StringIO
 
 # Import the module under test
 import sys
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
 
 from utils.logging_utils import ok, warn, fail, info, debug, is_debug_enabled
 

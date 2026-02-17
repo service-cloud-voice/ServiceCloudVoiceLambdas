@@ -59,4 +59,4 @@ async function retrieveFromCache(contactId) {
 
 module.exports = {
   retrieveFromCache,
-};
+}; 

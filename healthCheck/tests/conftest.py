@@ -6,10 +6,6 @@ import pytest
 import sys
 import os
 
-# Add the healthCheck directory to Python path for imports
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
-
-
 @pytest.fixture
 def sample_health_input():
     """Fixture providing a sample HealthCheckInput for testing"""
@@ -182,3 +178,4 @@ def mock_aws_clients():
     }
     
     return clients
+

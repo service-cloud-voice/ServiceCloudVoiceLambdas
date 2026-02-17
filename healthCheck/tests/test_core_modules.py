@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 # Import the module under test
 import sys
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
 
 from core.config import load_expected_from_layer
 from core.multithreading import MultiThreadedValidator
@@ -160,7 +159,7 @@ class TestMultiThreadedValidator:
         # Verify
         assert len(result) == 11  # All 11 validators should run
         mock_validate_lambdas.assert_called_once_with(config, health_input)
-        mock_validate_roles.assert_called_once_with(config)
+        mock_validate_roles.assert_called_once_with(config, health_input)
         # Verify specific results are in the output
         role_results = [r for r in result if r["ResourceType"] == "IAM Role"]
         lambda_results = [r for r in result if r["ResourceType"] == "Lambda Function"]
@@ -272,6 +271,69 @@ class TestMultiThreadedValidator:
         assert len(s3_results) == 1
         assert len(validator.errors) == 1
         assert "Failed to validate alarms: CloudWatch error" in validator.errors[0]
+
+    @patch('validators.validate_roles')
+    @patch('validators.validate_lambdas') 
+    @patch('validators.validate_layers')
+    @patch('validators.validate_policies')
+    @patch('validators.validate_alarms')
+    @patch('validators.validate_s3')
+    @patch('validators.validate_kinesis')
+    @patch('validators.validate_kms_aliases')
+    @patch('validators.validate_triggers_by_lambda_policy')
+    @patch('validators.validate_event_source_mappings')
+    @patch('validators.validate_lambda_permissions')
+    def test_multithreaded_validator_error_collection(self, mock_lambda_perms, mock_event_mappings, 
+                                                     mock_triggers, mock_kms, mock_kinesis, mock_s3,
+                                                     mock_alarms, mock_policies, mock_layers, 
+                                                     mock_lambdas, mock_roles):
+        """Test that MultiThreadedValidator properly collects errors from failed health checks"""
+        from core.multithreading import MultiThreadedValidator
+        from models.health_models import HealthCheckInput
+        
+        # Create a mock health input
+        health_input = MagicMock(spec=HealthCheckInput)
+        health_input.max_threads = 2
+        
+        # Create config
+        config = {"test": "config"}
+        
+        # Create validator instance
+        validator = MultiThreadedValidator(health_input, config)
+        
+        # Mock validation function that returns health checks with errors
+        mock_roles.return_value = {
+            "ResourceType": "IAM Role",
+            "DetailedHealthCheck": [
+                {"ResourceName": "TestResource1", "status": 200, "message": "OK"},
+                {"ResourceName": "TestResource2", "status": 500, "message": "Resource not found"},
+                {"ResourceName": "TestResource3", "status": 404, "message": "Access denied"}
+            ]
+        }
+        
+        # Mock other validation functions to return empty results
+        empty_result = {"ResourceType": "Test", "DetailedHealthCheck": []}
+        mock_lambdas.return_value = empty_result
+        mock_layers.return_value = empty_result
+        mock_policies.return_value = empty_result
+        mock_alarms.return_value = empty_result
+        mock_s3.return_value = empty_result
+        mock_kinesis.return_value = empty_result
+        mock_kms.return_value = empty_result
+        mock_triggers.return_value = empty_result
+        mock_event_mappings.return_value = empty_result
+        mock_lambda_perms.return_value = empty_result
+        
+        all_lambda_names = set()
+        results = validator.validate_all_resources_parallel(all_lambda_names)
+        
+        # Verify that errors were collected (line 98 coverage)
+        assert len(validator.errors) > 0
+        
+        # Check that error messages contain the expected resource names and messages
+        error_messages = ' '.join(validator.errors)
+        assert "TestResource2: Resource not found" in error_messages
+        assert "TestResource3: Access denied" in error_messages
 
 
 class TestGenerateEnhancedReport:

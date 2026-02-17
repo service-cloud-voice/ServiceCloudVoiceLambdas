@@ -69,7 +69,7 @@ function constructFlowInputParams(rawFlowInputParams) {
 }
 
 module.exports = {
-  generateJWT,
-  getCallAttributes,
-  constructFlowInputParams,
+    generateJWT,
+    getCallAttributes,
+    constructFlowInputParams,
 };

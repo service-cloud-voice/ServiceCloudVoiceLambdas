@@ -7,7 +7,6 @@ from enum import Enum
 
 # Import the module under test
 import sys
-sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCheck')
 
 from models.health_models import HealthStatus, HealthCheckInput, ResourceHealthResult
 

@@ -143,4 +143,4 @@ describe('secretUtils', () => {
       expect(SCVLoggingUtil.error).toHaveBeenCalled();
     });
   });
-});
+}); 

@@ -13,7 +13,9 @@ sys.path.insert(0, '/Users/tkuwar/opt/workspace/aws-integration/lambdas/healthCh
 from utils.stream_discovery import (
     discover_connect_streams,
     _discover_ctr_stream,
-    _discover_contact_lens_stream
+    _discover_contact_lens_stream,
+    discover_connect_s3_storage,
+    discover_connect_storage
 )
 
 
@@ -309,5 +311,187 @@ class TestStreamDiscovery:
         }
         
         result = _discover_contact_lens_stream(mock_connect_client, "test-instance")
+        
+        assert result is None
+
+
+class TestS3StorageDiscovery:
+    """Test cases for S3 storage discovery functions"""
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_connect_s3_storage_success(self, mock_boto3_client):
+        """Test successful S3 storage discovery"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock successful responses for both resource types
+        def mock_list_storage_configs(InstanceId, ResourceType):
+            if ResourceType == "CALL_RECORDINGS":
+                return {
+                    'StorageConfigs': [{
+                        'StorageType': 'S3',
+                        'S3Config': {
+                            'BucketName': 'call-recordings-bucket'
+                        }
+                    }]
+                }
+            elif ResourceType == "CHAT_TRANSCRIPTS":
+                return {
+                    'StorageConfigs': [{
+                        'StorageType': 'S3',
+                        'S3Config': {
+                            'BucketName': 'chat-transcripts-bucket'
+                        }
+                    }]
+                }
+            return {'StorageConfigs': []}
+        
+        mock_connect.list_instance_storage_configs.side_effect = mock_list_storage_configs
+        
+        result = discover_connect_s3_storage("test-instance-id")
+        
+        assert result == {
+            'call_recordings_s3_bucket': 'call-recordings-bucket',
+            'chat_transcripts_s3_bucket': 'chat-transcripts-bucket'
+        }
+        
+        # Verify both calls were made
+        assert mock_connect.list_instance_storage_configs.call_count == 2
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_connect_s3_storage_with_region(self, mock_boto3_client):
+        """Test S3 storage discovery with specific region"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock responses
+        mock_connect.list_instance_storage_configs.return_value = {
+            'StorageConfigs': [{
+                'StorageType': 'S3',
+                'S3Config': {
+                    'BucketName': 'test-bucket'
+                }
+            }]
+        }
+        
+        result = discover_connect_s3_storage("test-instance-id", "us-west-2")
+        
+        # Verify client was created with correct region
+        mock_boto3_client.assert_called_with('connect', region_name='us-west-2')
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_connect_s3_storage_no_configs(self, mock_boto3_client):
+        """Test S3 storage discovery when no storage configs exist"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock empty responses
+        mock_connect.list_instance_storage_configs.return_value = {
+            'StorageConfigs': []
+        }
+        
+        result = discover_connect_s3_storage("test-instance-id")
+        
+        assert result == {
+            'call_recordings_s3_bucket': None,
+            'chat_transcripts_s3_bucket': None
+        }
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_connect_s3_storage_client_error(self, mock_boto3_client):
+        """Test S3 storage discovery with ClientError"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock ClientError
+        from botocore.exceptions import ClientError
+        mock_connect.list_instance_storage_configs.side_effect = ClientError(
+            {'Error': {'Code': 'AccessDenied'}}, 'list_instance_storage_configs'
+        )
+        
+        result = discover_connect_s3_storage("test-instance-id")
+        
+        assert result == {
+            'call_recordings_s3_bucket': None,
+            'chat_transcripts_s3_bucket': None
+        }
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_connect_s3_storage_exception(self, mock_boto3_client):
+        """Test S3 storage discovery with general exception"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock general exception
+        mock_connect.list_instance_storage_configs.side_effect = Exception("Connection failed")
+        
+        result = discover_connect_s3_storage("test-instance-id")
+        
+        assert result == {
+            'call_recordings_s3_bucket': None,
+            'chat_transcripts_s3_bucket': None
+        }
+
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_s3_storage_helper_call_recordings(self, mock_boto3_client):
+        """Test _discover_s3_storage helper function for call recordings"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock successful response
+        mock_connect.list_instance_storage_configs.return_value = {
+            'StorageConfigs': [{
+                'StorageType': 'S3',
+                'S3Config': {
+                    'BucketName': 'test-call-recordings-bucket'
+                }
+            }]
+        }
+        
+        from utils.stream_discovery import _discover_s3_storage
+        result = _discover_s3_storage(mock_connect, "test-instance-id", "CALL_RECORDINGS")
+        
+        assert result == 'test-call-recordings-bucket'
+        mock_connect.list_instance_storage_configs.assert_called_once_with(
+            InstanceId="test-instance-id",
+            ResourceType="CALL_RECORDINGS"
+        )
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_s3_storage_helper_no_s3_config(self, mock_boto3_client):
+        """Test _discover_s3_storage helper when no S3 config exists"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock response with non-S3 storage type
+        mock_connect.list_instance_storage_configs.return_value = {
+            'StorageConfigs': [{
+                'StorageType': 'KINESIS_DATA_STREAM',
+                'KinesisStreamConfig': {
+                    'StreamArn': 'arn:aws:kinesis:us-east-1:123456789012:stream/test'
+                }
+            }]
+        }
+        
+        from utils.stream_discovery import _discover_s3_storage
+        result = _discover_s3_storage(mock_connect, "test-instance-id", "CHAT_TRANSCRIPTS")
+        
+        assert result is None
+
+    @patch('utils.stream_discovery.boto3.client')
+    def test_discover_s3_storage_helper_client_error(self, mock_boto3_client):
+        """Test _discover_s3_storage helper with ClientError"""
+        mock_connect = MagicMock()
+        mock_boto3_client.return_value = mock_connect
+        
+        # Mock ClientError
+        from botocore.exceptions import ClientError
+        mock_connect.list_instance_storage_configs.side_effect = ClientError(
+            {'Error': {'Code': 'AccessDenied'}}, 'list_instance_storage_configs'
+        )
+        
+        from utils.stream_discovery import _discover_s3_storage
+        result = _discover_s3_storage(mock_connect, "test-instance-id", "CALL_RECORDINGS")
         
         assert result is None

@@ -1002,6 +1002,38 @@ describe("handler.js", () => {
 
     });
 
+    describe("getJwtToken", () => {
+      it("should generate JWT token successfully", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getJwtToken",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockToken = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.test-token";
+        utils.generateJWT.mockReturnValue(mockToken);
+
+        const result = await handler.handler(event);
+
+        expect(utils.generateJWT).toHaveBeenCalledWith({
+          orgId: "test-org-id",
+          callCenterApiName: "test-call-center",
+          expiresIn: "10m",
+          privateKey: "test-private-key",
+        });
+        expect(result).toEqual({
+          statusCode: 200,
+          message: "JWT token generated successfully",
+          token: mockToken,
+        });
+      });
+    });
+
     describe("unsupported method", () => {
       it("should throw error for unsupported method", async () => {
         const event = {
