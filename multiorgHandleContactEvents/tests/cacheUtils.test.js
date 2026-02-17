@@ -92,7 +92,7 @@ describe("cacheUtils", () => {
     it('should return null when cache not found (NoSuchKey)', async () => {
       const error = new Error('Not found');
       error.code = 'NoSuchKey';
-      
+
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.reject(error),
       });
@@ -109,7 +109,7 @@ describe("cacheUtils", () => {
     it('should return null when cache not found (NotFound)', async () => {
       const error = new Error('Not found');
       error.code = 'NotFound';
-      
+
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.reject(error),
       });
@@ -126,7 +126,7 @@ describe("cacheUtils", () => {
     it('should handle S3 errors and return null', async () => {
       const error = new Error('S3 Error');
       error.code = 'AccessDenied';
-      
+
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.reject(error),
       });
@@ -159,28 +159,28 @@ describe("cacheUtils", () => {
     it('should work with bucket only (no directory)', async () => {
       // Reset modules to clear cache
       jest.resetModules();
-      
+
       // Re-mock everything
       jest.doMock('aws-sdk', () => ({
         S3: jest.fn(() => mockS3),
       }));
-      
+
       jest.doMock('../SCVLoggingUtil', () => ({
         error: jest.fn(),
         warn: jest.fn(),
         debug: jest.fn(),
         info: jest.fn(),
       }));
-      
+
       // Override config for this test
       jest.doMock('../config', () => ({
         secretCacheS3: 'test-bucket-only',
       }));
-      
+
       // Re-require the modules
       const cacheUtilsWithoutDir = require('../cacheUtils');
       const SCVLoggingUtilBucketOnly = require('../SCVLoggingUtil');
-      
+
       const mockCacheData = { secretName: 'test-secret' };
       mockS3.getObject.mockReturnValue({
         promise: () => Promise.resolve({
@@ -202,28 +202,28 @@ describe("cacheUtils", () => {
     it('should return null when SECRET_CACHE_S3 is not set', async () => {
       // Reset modules to clear cache
       jest.resetModules();
-      
+
       // Re-mock everything
       jest.doMock('aws-sdk', () => ({
         S3: jest.fn(() => mockS3),
       }));
-      
+
       jest.doMock('../SCVLoggingUtil', () => ({
         error: jest.fn(),
         warn: jest.fn(),
         debug: jest.fn(),
         info: jest.fn(),
       }));
-      
+
       // Mock config with missing SECRET_CACHE_S3
       jest.doMock('../config', () => ({
         secretCacheS3: null,
       }));
-      
+
       // Re-require the modules
       const cacheUtilsNoEnv = require('../cacheUtils');
       const SCVLoggingUtilNoEnv = require('../SCVLoggingUtil');
-      
+
       const result = await cacheUtilsNoEnv.retrieveFromCache(contactId);
 
       expect(result).toBeNull();
@@ -235,7 +235,7 @@ describe("cacheUtils", () => {
   });
 
   describe('storeInCache', () => {
-    const mockCacheData = { 
+    const mockCacheData = {
       secretName: 'test-secret-name',
       timestamp: '2023-01-01T00:00:00Z',
       orgId: 'test-org-123'
@@ -264,28 +264,28 @@ describe("cacheUtils", () => {
     it('should return false when SECRET_CACHE_S3 is not set', async () => {
       // Reset modules to clear cache
       jest.resetModules();
-      
+
       // Re-mock everything
       jest.doMock('aws-sdk', () => ({
         S3: jest.fn(() => mockS3),
       }));
-      
+
       jest.doMock('../SCVLoggingUtil', () => ({
         error: jest.fn(),
         warn: jest.fn(),
         debug: jest.fn(),
         info: jest.fn(),
       }));
-      
+
       // Mock config with missing SECRET_CACHE_S3
       jest.doMock('../config', () => ({
         secretCacheS3: null,
       }));
-      
+
       // Re-require the modules
       const cacheUtilsNoEnv = require('../cacheUtils');
       const SCVLoggingUtilNoEnv = require('../SCVLoggingUtil');
-      
+
       const result = await cacheUtilsNoEnv.storeInCache(contactId, mockCacheData);
 
       expect(result).toBe(false);
@@ -299,7 +299,7 @@ describe("cacheUtils", () => {
     it('should handle S3 putObject errors and return false', async () => {
       const error = new Error('S3 Put Error');
       error.code = 'AccessDenied';
-      
+
       mockS3.putObject.mockReturnValue({
         promise: () => Promise.reject(error),
       });
@@ -316,28 +316,28 @@ describe("cacheUtils", () => {
     it('should work with bucket only (no directory)', async () => {
       // Reset modules to clear cache
       jest.resetModules();
-      
+
       // Re-mock everything
       jest.doMock('aws-sdk', () => ({
         S3: jest.fn(() => mockS3),
       }));
-      
+
       jest.doMock('../SCVLoggingUtil', () => ({
         error: jest.fn(),
         warn: jest.fn(),
         debug: jest.fn(),
         info: jest.fn(),
       }));
-      
+
       // Override config for this test
       jest.doMock('../config', () => ({
         secretCacheS3: 'test-bucket-only',
       }));
-      
+
       // Re-require the modules
       const cacheUtilsWithoutDir = require('../cacheUtils');
       const SCVLoggingUtilBucketOnly = require('../SCVLoggingUtil');
-      
+
       mockS3.putObject.mockReturnValue({
         promise: () => Promise.resolve({}),
       });
@@ -420,4 +420,4 @@ describe("cacheUtils", () => {
       expect(result).toBe(true);
     });
   });
-}); 
+});

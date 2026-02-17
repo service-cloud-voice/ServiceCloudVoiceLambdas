@@ -35,7 +35,7 @@ async function createVoiceCall(fieldVals, configData) {
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
+
   const jwt = await utils.generateJWT(generateJWTParams);
 
   fieldValues.callCenterApiName = generateJWTParams.callCenterApiName;
@@ -80,7 +80,6 @@ async function updateVoiceCall(contactId, fieldValues, configData) {
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
   const jwt = await utils.generateJWT(generateJWTParams);
 
   const patchResponse = await axiosWrapper.getScrtEndpoint(configData)
@@ -123,7 +122,7 @@ async function executeOmniFlow(contactId, payload, configData) {
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
+
   const jwt = await utils.generateJWT(generateJWTParams);
   const responseVal = await axiosWrapper.getScrtEndpoint(configData)
     .patch(`/voiceCalls/${contactId}/omniFlow`, payload, {
@@ -166,7 +165,7 @@ async function sendMessage(contactId, payload, configData) {
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
+
   const jwt = await utils.generateJWT(generateJWTParams);
   const responseVal = await axiosWrapper.getScrtEndpoint(configData)
     .post(`/voiceCalls/${contactId}/messages`, payload, {
@@ -214,7 +213,7 @@ async function cancelOmniFlowExecution(contactId, configData) {
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
+
   const jwt = await utils.generateJWT(generateJWTParams);
 
   const responseVal = await axiosWrapper.getScrtEndpoint(configData)
@@ -255,7 +254,7 @@ async function rerouteFlowExecution(contactId, configData) {
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
+
   const jwt = await utils.generateJWT(generateJWTParams);
   const responseVal = await axiosWrapper.getScrtEndpoint(configData)
       .patch(`/voiceCalls/${contactId}/reroute`, null, {
@@ -295,14 +294,14 @@ async function callbackExecution(contactId, payload, configData) {
     message: "Callback Request created",
     context: { contactId: contactId },
   });
-  
+
   const generateJWTParams = {
     orgId: configData.orgId,
     callCenterApiName: configData.callCenterApiName,
     expiresIn: configData.tokenValidFor,
     privateKey: configData.privateKey,
   };
-  
+
   const jwt = await utils.generateJWT(generateJWTParams);
   const responseVal = await axiosWrapper.getScrtEndpoint(configData)
     .post(`/voiceCalls/${contactId}/requestCallback`, payload, {

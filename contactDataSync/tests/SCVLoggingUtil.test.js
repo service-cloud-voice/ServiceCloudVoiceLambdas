@@ -42,4 +42,4 @@ describe('SCVLoggingUtil', () => {
     const log = SCVLoggingUtil.debug({ message: 'msg', context: { foo: 'bar' } });
     expect(typeof log).toBe('undefined'); // debug returns undefined
   });
-}); 
+});

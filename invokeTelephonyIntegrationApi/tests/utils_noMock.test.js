@@ -4,7 +4,7 @@ jest.mock('uuid/v1');
 const uuid = require('uuid');
 const selfsigned = require("selfsigned");
 
-afterEach(() => {    
+afterEach(() => {
   jest.clearAllMocks();
 });
 
@@ -47,4 +47,4 @@ describe('generateJWTWithActualKey', () => {
         expect(jwtValue).not.toBeNull();
         expect(typeof jwtValue).toBe('string');
     });
-}); 
+});

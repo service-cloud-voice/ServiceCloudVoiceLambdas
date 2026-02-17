@@ -28,4 +28,4 @@ describe('sfRestApi', () => {
     }));
     expect(result).toBe('result');
   });
-}); 
+});

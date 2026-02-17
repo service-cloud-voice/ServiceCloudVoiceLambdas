@@ -19,16 +19,16 @@ async function readSecret(secretName) {
     if (!secretName) {
         throw new Error('Secret name is required');
     }
-    
+
     try {
         const secretResponse = await secretsManager.getSecretValue({ SecretId: secretName }).promise();
         const secretData = JSON.parse(secretResponse.SecretString);
-        
+
         SCVLoggingUtil.debug({
             message: 'Successfully retrieved secret',
             context: { secretName }
         });
-        
+
         return secretData;
     } catch (error) {
         SCVLoggingUtil.error({
@@ -47,31 +47,31 @@ async function readSecret(secretName) {
 async function getSecretConfigs(secretName) {
     try {
         const secretData = await readSecret(secretName);
-        
+
         const salesforceOrgId = secretData[CONFIG_KEYS.SALESFORCE_ORG_ID];
         const scrtEndpointBase = secretData[CONFIG_KEYS.SCRT_ENDPOINT_BASE];
         const callCenterApiName = secretData[CONFIG_KEYS.CALL_CENTER_API_NAME];
-        
+
         // Build the private key parameter name from the call center API name
         const privateKeyParamName = `${callCenterApiName}-scrt-jwt-auth-private-key`;
         const privateKey = secretData[privateKeyParamName];
-        
+
         if (!salesforceOrgId || !scrtEndpointBase || !callCenterApiName) {
             throw new Error('Missing required secret configuration values');
         }
-        
+
         const config = {
             salesforceOrgId,
             scrtEndpointBase,
             callCenterApiName,
             privateKey
         };
-        
+
         SCVLoggingUtil.debug({
             message: 'Successfully built configuration from secret',
             context: { secretName, callCenterApiName }
         });
-        
+
         return config;
     } catch (error) {
         SCVLoggingUtil.error({
@@ -85,4 +85,4 @@ async function getSecretConfigs(secretName) {
 module.exports = {
     getSecretConfigs,
     CONFIG_KEYS
-}; 
+};

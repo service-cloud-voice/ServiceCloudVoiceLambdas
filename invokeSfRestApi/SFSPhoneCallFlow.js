@@ -72,8 +72,8 @@ class SFSPhoneCallFlow {
 
       qry = `SELECT ServiceResource.RelatedRecord.Phone
               FROM AssignedResource
-              WHERE (LocationStatus in ('EnRoute', 'LastMile')) 
-          	    AND (ServiceAppointment.Status='${ApptAssistantStatus}') 
+              WHERE (LocationStatus in ('EnRoute', 'LastMile'))
+          	    AND (ServiceAppointment.Status='${ApptAssistantStatus}')
           	    AND (ServiceAppointment.Contact.Phone='${cusPhoneNumber}')
               ORDER BY AssignedResourceNumber DESC
               LIMIT 1`;

@@ -32,4 +32,4 @@ describe('awsUtils', () => {
     const result = await awsUtils.invokeLambdaFunction(params);
     expect(result).toBe('lambdaResult');
   });
-}); 
+});

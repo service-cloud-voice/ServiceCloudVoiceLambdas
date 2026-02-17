@@ -36,7 +36,7 @@ public class ConfigManagerTest {
     @Test
     void testGetSecretConfigWithValidSecret() throws Exception {
         String secretName = "test-secret";
-        
+
         // Mock the AWS Secrets Manager
         try (MockedStatic<SecretsManagerClient> clientMock = Mockito.mockStatic(SecretsManagerClient.class)) {
             SecretsManagerClient mockClient = mock(SecretsManagerClient.class);
@@ -45,9 +45,9 @@ public class ConfigManagerTest {
             // Create a mock GetSecretValueResponse with the secret string
             String secretJson = "{\"testKey\":\"testValue\",\"anotherKey\":\"anotherValue\"}";
             GetSecretValueResponse response = GetSecretValueResponse.builder()
-                .secretString(secretJson)
-                .build();
-            
+                    .secretString(secretJson)
+                    .build();
+
             when(mockClient.getSecretValue(any(GetSecretValueRequest.class))).thenReturn(response);
 
             // Test getting configuration values using new API
@@ -68,7 +68,7 @@ public class ConfigManagerTest {
     @Test
     void testGetConfigValueNullKey() throws Exception {
         String secretName = "test-secret";
-        
+
         try (MockedStatic<SecretsManagerClient> clientMock = Mockito.mockStatic(SecretsManagerClient.class)) {
             SecretsManagerClient mockClient = mock(SecretsManagerClient.class);
             clientMock.when(SecretsManagerClient::create).thenReturn(mockClient);
@@ -76,9 +76,9 @@ public class ConfigManagerTest {
             // Create a mock GetSecretValueResponse with the secret string
             String secretJson = "{\"testKey\":\"testValue\"}";
             GetSecretValueResponse response = GetSecretValueResponse.builder()
-                .secretString(secretJson)
-                .build();
-            
+                    .secretString(secretJson)
+                    .build();
+
             when(mockClient.getSecretValue(any(GetSecretValueRequest.class))).thenReturn(response);
 
             // Test getting a null value for non-existent key
@@ -91,7 +91,7 @@ public class ConfigManagerTest {
     @Test
     void testBasicFunctionality() throws Exception {
         String secretName = "test-secret";
-        
+
         try (MockedStatic<SecretsManagerClient> clientMock = Mockito.mockStatic(SecretsManagerClient.class)) {
             SecretsManagerClient mockClient = mock(SecretsManagerClient.class);
             clientMock.when(SecretsManagerClient::create).thenReturn(mockClient);
@@ -99,18 +99,18 @@ public class ConfigManagerTest {
             // Create a mock GetSecretValueResponse with the secret string
             String secretJson = "{\"testKey\":\"testValue\"}";
             GetSecretValueResponse response = GetSecretValueResponse.builder()
-                .secretString(secretJson)
-                .build();
-            
+                    .secretString(secretJson)
+                    .build();
+
             when(mockClient.getSecretValue(any(GetSecretValueRequest.class))).thenReturn(response);
 
             // Test basic functionality
             ConfigManager.SecretConfig config = ConfigManager.getSecretConfig(secretName);
             String value = config.getConfigValue("testKey");
             assertEquals("testValue", value);
-            
+
             // Test source secret name
             assertEquals(secretName, config.getSourceSecretName());
         }
     }
-} 
+}

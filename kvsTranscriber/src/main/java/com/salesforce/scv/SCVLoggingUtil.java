@@ -40,7 +40,7 @@ public class SCVLoggingUtil {
      *  DEBUG,  // Only when you would be "debugging" the code and trying to find one part of a function specifically
      *  TRACE,  // Only when you would be "tracing" the code and trying to find one part of a function specifically
      */
-    
+
     /**
      * Create a log line with level of INFO
      *
@@ -189,7 +189,7 @@ public class SCVLoggingUtil {
      * Public enum for recommended context key of performance.
      */
     public enum PERFORMANCE_CONTEXT_KEY {
-        ORG_ID, // required 
+        ORG_ID, // required
         TOTAL_RESPONSE_TIME_NS, // add unit for time related keys
         SELF_TIME_NS,
         EXTERNAL_TIME_NS,

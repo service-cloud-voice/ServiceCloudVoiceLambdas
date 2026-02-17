@@ -6,7 +6,7 @@ const SCVLoggingUtil = require('../SCVLoggingUtil');
 jest.mock('aws-sdk', () => {
   const getSecretValueMock = jest.fn();
   const updateSecretMock = jest.fn();
-  
+
   return {
     SecretsManager: jest.fn(() => ({
       getSecretValue: getSecretValueMock,
@@ -64,7 +64,7 @@ describe('secretUtils', () => {
 
     it('should throw error when secret contains binary data', async () => {
       const secretName = 'test-secret';
-      
+
       getSecretValueMock.mockReturnValue({
         promise: () => Promise.resolve({
           SecretBinary: Buffer.from('binary-data')
@@ -76,7 +76,7 @@ describe('secretUtils', () => {
 
     it('should throw error when secret string is not valid JSON', async () => {
       const secretName = 'test-secret';
-      
+
       getSecretValueMock.mockReturnValue({
         promise: () => Promise.resolve({
           SecretString: 'invalid-json'
@@ -88,7 +88,7 @@ describe('secretUtils', () => {
 
     it('should throw error when secret string is not an object', async () => {
       const secretName = 'test-secret';
-      
+
       getSecretValueMock.mockReturnValue({
         promise: () => Promise.resolve({
           SecretString: '"string-value"'
@@ -100,7 +100,7 @@ describe('secretUtils', () => {
 
     it('should throw error when secret string is null', async () => {
       const secretName = 'test-secret';
-      
+
       getSecretValueMock.mockReturnValue({
         promise: () => Promise.resolve({
           SecretString: 'null'
@@ -112,7 +112,7 @@ describe('secretUtils', () => {
 
     it('should throw error when secret is not found', async () => {
       const secretName = 'test-secret';
-      
+
       getSecretValueMock.mockReturnValue({
         promise: () => Promise.resolve({})
       });
@@ -123,7 +123,7 @@ describe('secretUtils', () => {
     it('should throw error when AWS Secrets Manager call fails', async () => {
       const secretName = 'test-secret';
       const awsError = new Error('AWS service error');
-      
+
       getSecretValueMock.mockReturnValue({
         promise: () => Promise.reject(awsError)
       });
@@ -288,4 +288,4 @@ describe('secretUtils', () => {
       await expect(secretUtils.getSecretConfigs(secretName)).rejects.toThrow('Failed to get secret test-secret: AWS service error');
     });
   });
-}); 
+});

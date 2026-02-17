@@ -137,7 +137,7 @@ describe('SSMUtil Tests', () => {
             logLevel: 'info',
             secretName: undefined
         }));
-        
+
         // Re-require the handler to pick up the new config
         jest.resetModules();
         const handlerWithoutSecret = require('../index');
@@ -163,7 +163,7 @@ describe('SSMUtil Tests', () => {
             logLevel: 'info',
             secretName: ''
         }));
-        
+
         // Mock selfsigned for this test
         const mockSelfsigned = {
             generate: jest.fn().mockReturnValue({
@@ -172,7 +172,7 @@ describe('SSMUtil Tests', () => {
             })
         };
         jest.doMock('selfsigned', () => mockSelfsigned);
-        
+
         // Re-require the handler to pick up the new config
         jest.resetModules();
         const handlerWithoutSecret = require('../index');

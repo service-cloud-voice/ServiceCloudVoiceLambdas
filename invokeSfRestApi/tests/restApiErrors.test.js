@@ -15,7 +15,7 @@ const api = require('../sfRestApi.js');
 jest.mock('jsonwebtoken');
 const jwt = require('jsonwebtoken');
 
-afterEach(() => {    
+afterEach(() => {
   jest.clearAllMocks();
 });
 

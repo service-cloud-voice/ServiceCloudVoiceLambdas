@@ -84,7 +84,7 @@ describe('telephonyIntegrationApi', () => {
     });
 
     it('should handle error when creating voice call', async () => {
-      const mockError = new Error('API Error');      
+      const mockError = new Error('API Error');
       utils.generateJWT.mockResolvedValue('test-jwt-token');
       mockPost.mockRejectedValue(mockError);
 

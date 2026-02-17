@@ -95,4 +95,4 @@ describe("telephonyIntegrationApi", () => {
       expect(SCVLoggingUtil.error).toHaveBeenCalled();
     });
   });
-}); 
+});

@@ -49,7 +49,7 @@ async function processEvent(message, event, methodName) {
   // Fetch secret name from cache using contactId
   let secretData = null;
   let secretConfigs = null;
-  
+
   try {
     const cacheData = await retrieveFromCache(contactId);
     if (cacheData && cacheData.secretName) {

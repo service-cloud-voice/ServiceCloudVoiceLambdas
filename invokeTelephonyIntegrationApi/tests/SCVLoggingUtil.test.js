@@ -32,9 +32,9 @@ describe("SCVLoggingUtil tests", () => {
 
     describe("info", () => {
         it("should log info with complete logLine", () => {
-            const logLine = { 
-                context: { contactId: "test-contact" }, 
-                message: "Test info message" 
+            const logLine = {
+                context: { contactId: "test-contact" },
+                message: "Test info message"
             };
             const infoSpy = jest.spyOn(loggerInstance, "info");
             info(logLine);
@@ -46,8 +46,8 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log info with default values when context is missing", () => {
-            const logLine = { 
-                message: "Test info message" 
+            const logLine = {
+                message: "Test info message"
             };
             const infoSpy = jest.spyOn(loggerInstance, "info");
             info(logLine);
@@ -59,7 +59,7 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log info with default values when message is missing", () => {
-            const logLine = { 
+            const logLine = {
                 context: { contactId: "test-contact" }
             };
             const infoSpy = jest.spyOn(loggerInstance, "info");
@@ -85,9 +85,9 @@ describe("SCVLoggingUtil tests", () => {
 
     describe("debug", () => {
         it("should log debug with complete logLine", () => {
-            const logLine = { 
-                context: { payload: { data: "test" } }, 
-                message: "Test debug message" 
+            const logLine = {
+                context: { payload: { data: "test" } },
+                message: "Test debug message"
             };
             const debugSpy = jest.spyOn(loggerInstance, "debug");
             debug(logLine);
@@ -99,8 +99,8 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log debug with default values when context is missing", () => {
-            const logLine = { 
-                message: "Test debug message" 
+            const logLine = {
+                message: "Test debug message"
             };
             const debugSpy = jest.spyOn(loggerInstance, "debug");
             debug(logLine);
@@ -112,7 +112,7 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log debug with default values when message is missing", () => {
-            const logLine = { 
+            const logLine = {
                 context: { debug: true }
             };
             const debugSpy = jest.spyOn(loggerInstance, "debug");
@@ -127,9 +127,9 @@ describe("SCVLoggingUtil tests", () => {
 
     describe("warn", () => {
         it("should log warn with complete logLine", () => {
-            const logLine = { 
-                context: { warning: "potential issue" }, 
-                message: "Test warning message" 
+            const logLine = {
+                context: { warning: "potential issue" },
+                message: "Test warning message"
             };
             const warnSpy = jest.spyOn(loggerInstance, "warn");
             warn(logLine);
@@ -141,8 +141,8 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log warn with default values when context is missing", () => {
-            const logLine = { 
-                message: "Test warning message" 
+            const logLine = {
+                message: "Test warning message"
             };
             const warnSpy = jest.spyOn(loggerInstance, "warn");
             warn(logLine);
@@ -154,7 +154,7 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log warn with default values when message is missing", () => {
-            const logLine = { 
+            const logLine = {
                 context: { methodName: "unsupportedMethod" }
             };
             const warnSpy = jest.spyOn(loggerInstance, "warn");
@@ -169,9 +169,9 @@ describe("SCVLoggingUtil tests", () => {
 
     describe("error", () => {
         it("should log error with complete logLine", () => {
-            const logLine = { 
-                context: { payload: new Error("Test error") }, 
-                message: "Test error message" 
+            const logLine = {
+                context: { payload: new Error("Test error") },
+                message: "Test error message"
             };
             const errorSpy = jest.spyOn(loggerInstance, "error");
             error(logLine);
@@ -183,8 +183,8 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log error with default values when context is missing", () => {
-            const logLine = { 
-                message: "Test error message" 
+            const logLine = {
+                message: "Test error message"
             };
             const errorSpy = jest.spyOn(loggerInstance, "error");
             error(logLine);
@@ -196,7 +196,7 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should log error with default values when message is missing", () => {
-            const logLine = { 
+            const logLine = {
                 context: { payload: new Error("API failed") }
             };
             const errorSpy = jest.spyOn(loggerInstance, "error");
@@ -222,9 +222,9 @@ describe("SCVLoggingUtil tests", () => {
 
     describe("buildLog function coverage", () => {
         it("should handle falsy context values", () => {
-            const logLine = { 
+            const logLine = {
                 context: null,
-                message: "Test message" 
+                message: "Test message"
             };
             const infoSpy = jest.spyOn(loggerInstance, "info");
             info(logLine);
@@ -236,7 +236,7 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should handle falsy message values", () => {
-            const logLine = { 
+            const logLine = {
                 context: { test: "context" },
                 message: null
             };
@@ -250,9 +250,9 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should handle empty string context", () => {
-            const logLine = { 
+            const logLine = {
                 context: "",
-                message: "Test message" 
+                message: "Test message"
             };
             const infoSpy = jest.spyOn(loggerInstance, "info");
             info(logLine);
@@ -264,7 +264,7 @@ describe("SCVLoggingUtil tests", () => {
         });
 
         it("should handle empty string message", () => {
-            const logLine = { 
+            const logLine = {
                 context: { test: "context" },
                 message: ""
             };

@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 jest.mock('uuid/v1');
 const uuid = require('uuid');
 
-afterEach(() => {    
+afterEach(() => {
   jest.clearAllMocks();
 });
 
@@ -132,8 +132,8 @@ describe('getCallAttributes', () => {
     it('should handle empty input object', () => {
         const input = {};
         const expected = JSON.stringify({});
-        
+  
         const result = utils.getCallAttributes(input);
         expect(result).toBe(expected);
     });
-}); 
+});

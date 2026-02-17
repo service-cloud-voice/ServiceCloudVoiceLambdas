@@ -73,7 +73,7 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
         loggingContext.put(SCVLoggingUtil.VOICECALL_CONTEXT_KEY.VOICE_CALL_ID.toString(), request.getVoiceCallId());
         try {
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "Start Handle Request", loggingContext);
-            
+
             // validate the request
             request.validate();
 
@@ -86,7 +86,7 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
             SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "End Handle Request", loggingContext);
             return "{ \"result\": \"Success\" }";
         } catch (Exception e) {
-         	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), loggingContext);
+            SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.handleRequest", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), loggingContext);
             return "{ \"result\": \"Failed\" }";
         }
     }
@@ -104,18 +104,18 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
     private void startKVSToTranscribeStreaming(String instanceARN, String streamARN, String startFragmentNum, String voiceCallId, Optional<String> languageCode,
                                                long audioStartTimestamp, String customerPhoneNumber, boolean isStreamAudioFromCustomerEnabled, boolean isStreamAudioToCustomerEnabled, String engine,
                                                Optional<String> vocabularyName, Optional<String> vocabularyFilterName, Optional<String> vocabularyFilterMethod, Optional<String> specialty, ConfigManager.SecretConfig config) throws Exception {
-        
+
         SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "START KVS Transcribe Streaming", null);
-        
-        SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", 
-            SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, 
-            "Using configuration from secret: " + config.getSourceSecretName() + " for voiceCallId: " + voiceCallId, 
-            null);
-        
+
+        SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming",
+                SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
+                "Using configuration from secret: " + config.getSourceSecretName() + " for voiceCallId: " + voiceCallId,
+                null);
+
         fromCustomerSegmentWriter = new TranscribedSegmentWriter(instanceARN, voiceCallId, true, audioStartTimestamp, customerPhoneNumber, config);
         toCustomerSegmentWriter = new TranscribedSegmentWriter(instanceARN, voiceCallId, false, audioStartTimestamp, customerPhoneNumber, config);
 
-    	String streamName = streamARN.substring(streamARN.indexOf("/") + 1, streamARN.lastIndexOf("/"));
+        String streamName = streamARN.substring(streamARN.indexOf("/") + 1, streamARN.lastIndexOf("/"));
 
         Regions transcribeRegion = getTranscribeRegion(config);
         String transcribeEndpoint = "https://transcribestreaming." + transcribeRegion.getName() + ".amazonaws.com";
@@ -158,9 +158,9 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
                 toCustomerResult.get(890, TimeUnit.SECONDS);
             }
         } catch (TimeoutException e) {
-         	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
+            SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
         } catch (Exception e) {
-         	SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
+            SCVLoggingUtil.error("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, e.getMessage(), null);
             throw e;
         }
         SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.KVSTranscribeStreamingService.startKVSToTranscribeStreaming", SCVLoggingUtil.EVENT_TYPE.PERFORMANCE, "END KVS Transcribe Streaming", null);
@@ -194,7 +194,7 @@ public class KVSTranscribeStreamingService implements RequestHandler<Transcripti
     private CompletableFuture<Void> getStartStreamingTranscriptionFuture(KVSStreamTrackObject kvsStreamTrackObject, Optional<String> languageCodeOptional, String contactId, TranscribeStreamingRetryClient client,
                                                                          TranscribedSegmentWriter transcribedSegmentWriter, String channel, String engine, Optional<String> vocabularyName,
                                                                          Optional<String> vocabularyFilterName, Optional<String> vocabularyFilterMethod, Optional<String> specialty) {
-    	String languageCode = languageCodeOptional.isPresent() ? languageCodeOptional.get() : LanguageCode.EN_US.toString();
+        String languageCode = languageCodeOptional.isPresent() ? languageCodeOptional.get() : LanguageCode.EN_US.toString();
         TranscribeStreamingRequest request;
         if (engine.equals("medical")) {
             request = getMedicalRequest(languageCode, specialty, vocabularyName);

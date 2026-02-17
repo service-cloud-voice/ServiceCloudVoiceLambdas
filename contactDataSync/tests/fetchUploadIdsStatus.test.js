@@ -13,4 +13,4 @@ describe('fetchUploadIdsStatus', () => {
     expect(sfRestApi.invokeSfRestApiFetchUploadIdsStatus).toHaveBeenCalledWith('id1,id2', 'secret', 'access');
     expect(result).toBe('result');
   });
-}); 
+});

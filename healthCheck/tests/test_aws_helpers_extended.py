@@ -209,5 +209,3 @@ class TestLambdaRoleCorrect:
         
         assert result is False
         assert "Error checking role for error-function" in message
-
-

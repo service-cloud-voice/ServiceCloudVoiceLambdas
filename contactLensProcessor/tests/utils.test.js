@@ -12,7 +12,7 @@ jest.mock('../secretUtils', () => ({
 jest.mock('uuid/v1');
 const uuid = require('uuid');
 
-afterEach(() => {    
+afterEach(() => {
   jest.clearAllMocks();
 });
 

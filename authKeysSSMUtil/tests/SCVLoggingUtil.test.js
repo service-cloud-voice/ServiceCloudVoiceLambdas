@@ -38,9 +38,9 @@ describe('SCVLoggingUtil', () => {
         message: 'Test info message',
         context: { key: 'value' }
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: { key: 'value' },
         message: 'Test info message',
@@ -52,9 +52,9 @@ describe('SCVLoggingUtil', () => {
       const logLine = {
         message: 'Test info message'
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'Test info message',
@@ -66,9 +66,9 @@ describe('SCVLoggingUtil', () => {
       const logLine = {
         context: { key: 'value' }
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: { key: 'value' },
         message: 'NO_MESSAGE',
@@ -78,9 +78,9 @@ describe('SCVLoggingUtil', () => {
 
     it('should handle empty logLine object', () => {
       const logLine = {};
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'NO_MESSAGE',
@@ -95,9 +95,9 @@ describe('SCVLoggingUtil', () => {
         message: 'Test debug message',
         context: { debugKey: 'debugValue' }
       };
-      
+
       SCVLoggingUtil.debug(logLine);
-      
+
       expect(mockLogger.debug).toHaveBeenCalledWith({
         context: { debugKey: 'debugValue' },
         message: 'Test debug message',
@@ -109,9 +109,9 @@ describe('SCVLoggingUtil', () => {
       const logLine = {
         message: 'Test debug message'
       };
-      
+
       SCVLoggingUtil.debug(logLine);
-      
+
       expect(mockLogger.debug).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'Test debug message',
@@ -126,9 +126,9 @@ describe('SCVLoggingUtil', () => {
         message: 'Test warn message',
         context: { warnKey: 'warnValue' }
       };
-      
+
       SCVLoggingUtil.warn(logLine);
-      
+
       expect(mockLogger.warn).toHaveBeenCalledWith({
         context: { warnKey: 'warnValue' },
         message: 'Test warn message',
@@ -140,9 +140,9 @@ describe('SCVLoggingUtil', () => {
       const logLine = {
         message: 'Test warn message'
       };
-      
+
       SCVLoggingUtil.warn(logLine);
-      
+
       expect(mockLogger.warn).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'Test warn message',
@@ -157,9 +157,9 @@ describe('SCVLoggingUtil', () => {
         message: 'Test error message',
         context: { errorKey: 'errorValue' }
       };
-      
+
       SCVLoggingUtil.error(logLine);
-      
+
       expect(mockLogger.error).toHaveBeenCalledWith({
         context: { errorKey: 'errorValue' },
         message: 'Test error message',
@@ -171,9 +171,9 @@ describe('SCVLoggingUtil', () => {
       const logLine = {
         message: 'Test error message'
       };
-      
+
       SCVLoggingUtil.error(logLine);
-      
+
       expect(mockLogger.error).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'Test error message',
@@ -187,9 +187,9 @@ describe('SCVLoggingUtil', () => {
         message: 'Test error message',
         context: { error: errorObj }
       };
-      
+
       SCVLoggingUtil.error(logLine);
-      
+
       expect(mockLogger.error).toHaveBeenCalledWith({
         context: { error: errorObj },
         message: 'Test error message',
@@ -216,9 +216,9 @@ describe('SCVLoggingUtil', () => {
         message: null,
         context: null
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'NO_MESSAGE',
@@ -231,9 +231,9 @@ describe('SCVLoggingUtil', () => {
         message: undefined,
         context: undefined
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'NO_MESSAGE',
@@ -246,9 +246,9 @@ describe('SCVLoggingUtil', () => {
         message: '',
         context: ''
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'NO_MESSAGE',
@@ -261,9 +261,9 @@ describe('SCVLoggingUtil', () => {
         message: 0,
         context: false
       };
-      
+
       SCVLoggingUtil.info(logLine);
-      
+
       expect(mockLogger.info).toHaveBeenCalledWith({
         context: 'NO_CONTEXT',
         message: 'NO_MESSAGE',
@@ -271,4 +271,4 @@ describe('SCVLoggingUtil', () => {
       });
     });
   });
-}); 
+});

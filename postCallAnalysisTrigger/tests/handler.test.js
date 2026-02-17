@@ -58,14 +58,14 @@ jest.mock('aws-sdk', () => {
     }
 });
 
-afterEach(() => {    
+afterEach(() => {
   jest.clearAllMocks();
 });
 
 describe('Post Call Analysis Trigger Lambda handler', () => {
     /*
     Sample Contact Lens Post-call Analysis File Payload
-    
+
     {
         "Version": "1.1.0",
         "AccountId": "670991668472",
@@ -228,8 +228,8 @@ describe('Post Call Analysis Trigger Lambda handler', () => {
     api.persistSignals.mockImplementationOnce(() => Promise.resolve(expectedResponse));
     await handler.handler(event);
     expect(handler.getOverallBatchCount()).toBe(handler.getCurrentBatchCount());
-  });     
-  
+  });
+
   it('successfully triggers post-call JSON file analysis', async () => {
     const event = {
       version: "0",
