@@ -53,7 +53,7 @@ public class TranscribedSegmentWriter {
     private PrivateKey privKeyObject = null;
     private String jwtToken = null;
     private String instanceARN = null;
-    
+
     // Config values extracted once in constructor
     private final String scrtEndpointBase;
     private final String salesforceOrgId;
@@ -66,21 +66,21 @@ public class TranscribedSegmentWriter {
         this.audioStartTimestamp = audioStartTimestamp;
         this.customerPhoneNumber = customerPhoneNumber;
         this.instanceARN = instanceARN;
-        
+
         this.scrtEndpointBase = config.getConfigValue("SCRT_ENDPOINT_BASE");
         this.salesforceOrgId = config.getConfigValue("SALESFORCE_ORG_ID");
         this.callCenterApiName = config.getConfigValue("CALL_CENTER_API_NAME");
         String privateKeyParamName = this.callCenterApiName + "-scrt-jwt-auth-private-key";
         String rawPrivateKey = config.getConfigValue(privateKeyParamName);
         this.privateKey = rawPrivateKey
-            .replace(PRIVATE_KEY_START_DECORATION_LINE, "")
-            .replace(PRIVATE_KEY_END_DECORATION_LINE, "")
-            .replaceAll(PRIVATE_KEY_REXP_TO_REPLACE, "");
-        
-        SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.TranscribedSegmentWriter.constructor", 
-            SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION, 
-            "Using configuration from secret: " + config.getSourceSecretName(), 
-            null);
+                .replace(PRIVATE_KEY_START_DECORATION_LINE, "")
+                .replace(PRIVATE_KEY_END_DECORATION_LINE, "")
+                .replaceAll(PRIVATE_KEY_REXP_TO_REPLACE, "");
+
+        SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.TranscribedSegmentWriter.constructor",
+                SCVLoggingUtil.EVENT_TYPE.TRANSCRIPTION,
+                "Using configuration from secret: " + config.getSourceSecretName(),
+                null);
     }
 
 

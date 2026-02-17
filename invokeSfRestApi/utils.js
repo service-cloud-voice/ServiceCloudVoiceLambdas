@@ -27,22 +27,22 @@ async function getAccessToken(configs, accessTokenSecretName, refresh) {
   if (!accessToken || refresh) {
     // Obtain a new access token.
     const generatedJwt = generateJWT(
-        {
-          iss: consumerKey,
-          sub,
-          aud,
-        },
-        config.tokenValidFor,
-        privateKey
+      {
+        iss: consumerKey,
+        sub,
+        aud,
+      },
+      config.tokenValidFor,
+      privateKey
     );
     const response = await axiosWrapper.authEndpoint.post(
         configs.authEndpoint,
-        `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${generatedJwt}`,
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        }
+      `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${generatedJwt}`,
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
     );
 
     accessTokenSecret[callCenterApiName + "-salesforce-rest-api-access-token"] = response.data.access_token;
