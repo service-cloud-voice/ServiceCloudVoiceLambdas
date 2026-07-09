@@ -68,8 +68,13 @@ function constructFlowInputParams(rawFlowInputParams) {
   return flowInputParams;
 }
 
+function isValidE164(phoneNumber) {
+  return typeof phoneNumber === "string" && /^\+[1-9]\d{1,14}$/.test(phoneNumber);
+}
+
 module.exports = {
   generateJWT,
   getCallAttributes,
   constructFlowInputParams,
+  isValidE164,
 };

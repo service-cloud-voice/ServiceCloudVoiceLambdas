@@ -645,6 +645,264 @@ describe('telephonyIntegrationApi', () => {
     });
   });
 
+  describe('reserveRoutableNumber', () => {
+    const mockParameters = {
+      fromNumber: '+11800999932',
+      toNumber: '+15551234567',
+      countryCode: 'US',
+      callId: '0LQLT000001jmnt',
+      transactionId: 'tx-123',
+    };
+    const mockAttributes = {};
+    const mockConfigDataWithPath = {
+      ...mockConfigData,
+      scrtEndpointBase: 'https://test-scrt-endpoint.com/path',
+    };
+
+    beforeEach(() => {
+      utils.isValidE164.mockReturnValue(true);
+    });
+
+    it('should successfully reserve routable number', async () => {
+      const mockResponseData = {
+        handle: {
+          routableNumber: '+14155560999',
+          uid: 'uid-1',
+          expiresAt: '2026-07-09T12:00:00Z',
+        },
+        mode: 'number',
+      };
+      const mockAxiosResponse = { data: mockResponseData };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.reserveRoutableNumber(mockParameters, mockAttributes, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockPost).toHaveBeenCalledWith(
+        '/voiceCalls/reserveRoutableNumber',
+        {
+          countryCode: 'US',
+          fromNumber: '+11800999932',
+          context: {
+            scrt2Domain: 'https://test-scrt-endpoint.com',
+            toNumber: '+15551234567',
+            callId: '0LQLT000001jmnt',
+            transactionId: 'tx-123',
+          },
+        },
+        {
+          headers: {
+            ...buildAuthHeaders(),
+            'Telephony-Provider-Name': 'amazon-connect',
+          },
+        }
+      );
+      expect(result).toEqual({
+        statusCode: 200,
+        routableNumber: '+14155560999',
+        uid: 'uid-1',
+        expiresAt: '2026-07-09T12:00:00Z',
+        mode: 'number',
+      });
+    });
+
+    it('should extract scrt2Domain origin from scrtEndpointBase with path', async () => {
+      const mockResponseData = { handle: { routableNumber: '+1', uid: 'u', expiresAt: 'e' }, mode: 'm' };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue({ data: mockResponseData });
+
+      await api.reserveRoutableNumber(mockParameters, mockAttributes, mockConfigDataWithPath);
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/voiceCalls/reserveRoutableNumber',
+        expect.objectContaining({
+          context: expect.objectContaining({
+            scrt2Domain: 'https://test-scrt-endpoint.com',
+          }),
+        }),
+        expect.anything()
+      );
+    });
+
+    it('should omit callId and transactionId from context when not provided', async () => {
+      const paramsWithoutOptional = {
+        fromNumber: '+11800999932',
+        toNumber: '+15551234567',
+        countryCode: 'US',
+      };
+      const mockResponseData = { handle: { routableNumber: '+1', uid: 'u', expiresAt: 'e' }, mode: 'm' };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue({ data: mockResponseData });
+
+      await api.reserveRoutableNumber(paramsWithoutOptional, mockAttributes, mockConfigData);
+
+      const postCall = mockPost.mock.calls[0];
+      const payload = postCall[1];
+      expect(payload.context).not.toHaveProperty('callId');
+      expect(payload.context).not.toHaveProperty('transactionId');
+    });
+
+    it('should fall back to attributes for countryCode', async () => {
+      const paramsNoCountry = {
+        fromNumber: '+11800999932',
+        toNumber: '+15551234567',
+      };
+      const attrsWithCountry = { countryCode: 'GB' };
+      const mockResponseData = { handle: { routableNumber: '+1', uid: 'u', expiresAt: 'e' }, mode: 'm' };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue({ data: mockResponseData });
+
+      await api.reserveRoutableNumber(paramsNoCountry, attrsWithCountry, mockConfigData);
+
+      const postCall = mockPost.mock.calls[0];
+      expect(postCall[1].countryCode).toBe('GB');
+    });
+
+    it('should fall back to attributes for callId and transactionId', async () => {
+      const paramsNoOptional = {
+        fromNumber: '+11800999932',
+        toNumber: '+15551234567',
+        countryCode: 'US',
+      };
+      const attrsWithIds = { callId: 'attr-call-id', transactionId: 'attr-tx-id' };
+      const mockResponseData = { handle: { routableNumber: '+1', uid: 'u', expiresAt: 'e' }, mode: 'm' };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue({ data: mockResponseData });
+
+      await api.reserveRoutableNumber(paramsNoOptional, attrsWithIds, mockConfigData);
+
+      const postCall = mockPost.mock.calls[0];
+      expect(postCall[1].context.callId).toBe('attr-call-id');
+      expect(postCall[1].context.transactionId).toBe('attr-tx-id');
+    });
+
+    it('should throw error for missing fromNumber', async () => {
+      utils.isValidE164.mockReturnValue(false);
+      const params = { toNumber: '+15551234567', countryCode: 'US' };
+
+      await expect(
+        api.reserveRoutableNumber(params, mockAttributes, mockConfigData)
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+    });
+
+    it('should throw error for invalid fromNumber', async () => {
+      utils.isValidE164.mockImplementation((num) => num === '+15551234567');
+      const params = { fromNumber: 'not-e164', toNumber: '+15551234567', countryCode: 'US' };
+
+      await expect(
+        api.reserveRoutableNumber(params, mockAttributes, mockConfigData)
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+    });
+
+    it('should throw error for missing toNumber', async () => {
+      utils.isValidE164.mockImplementation((num) => num === '+11800999932');
+      const params = { fromNumber: '+11800999932', countryCode: 'US' };
+
+      await expect(
+        api.reserveRoutableNumber(params, mockAttributes, mockConfigData)
+      ).rejects.toThrow(/Invalid or missing toNumber/);
+    });
+
+    it('should throw error for missing countryCode when not in params or attributes', async () => {
+      const params = { fromNumber: '+11800999932', toNumber: '+15551234567' };
+
+      await expect(
+        api.reserveRoutableNumber(params, {}, mockConfigData)
+      ).rejects.toThrow('countryCode is required for reserveRoutableNumber');
+    });
+
+    it('should handle HTTP error with status and retry-after', async () => {
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      const httpError = new Error('Request failed');
+      httpError.response = {
+        status: 429,
+        headers: { 'retry-after': '30' },
+        data: { error: 'rate limited' },
+      };
+      mockPost.mockRejectedValue(httpError);
+
+      await expect(
+        api.reserveRoutableNumber(mockParameters, mockAttributes, mockConfigData)
+      ).rejects.toThrow('Error reserving routable number');
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+        message: 'Error reserving routable number',
+        context: {
+          status: 429,
+          retryAfter: '30',
+          data: { error: 'rate limited' },
+          error: 'Request failed',
+        },
+      });
+    });
+
+    it('should attach status and retryAfter to thrown error', async () => {
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      const httpError = new Error('Request failed');
+      httpError.response = {
+        status: 503,
+        headers: { 'retry-after': '60' },
+        data: { message: 'Service unavailable' },
+      };
+      mockPost.mockRejectedValue(httpError);
+
+      try {
+        await api.reserveRoutableNumber(mockParameters, mockAttributes, mockConfigData);
+      } catch (err) {
+        expect(err.status).toBe(503);
+        expect(err.retryAfter).toBe('60');
+        expect(err.responseData).toEqual({ message: 'Service unavailable' });
+      }
+    });
+
+    it('should handle null parameters and attributes gracefully', async () => {
+      utils.isValidE164.mockReturnValue(false);
+
+      await expect(
+        api.reserveRoutableNumber(null, null, mockConfigData)
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+    });
+
+    it('should return shaped response with handle fields', async () => {
+      const mockResponseData = {
+        handle: {
+          routableNumber: '+14155560999',
+          uid: 'uid-abc',
+          expiresAt: '2026-12-31T23:59:59Z',
+        },
+        mode: 'pool',
+      };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue({ data: mockResponseData });
+
+      const result = await api.reserveRoutableNumber(mockParameters, mockAttributes, mockConfigData);
+
+      expect(result).toEqual({
+        statusCode: 200,
+        routableNumber: '+14155560999',
+        uid: 'uid-abc',
+        expiresAt: '2026-12-31T23:59:59Z',
+        mode: 'pool',
+      });
+    });
+
+    it('should handle empty response data gracefully', async () => {
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockPost.mockResolvedValue({ data: {} });
+
+      const result = await api.reserveRoutableNumber(mockParameters, mockAttributes, mockConfigData);
+
+      expect(result).toEqual({
+        statusCode: 200,
+        routableNumber: undefined,
+        uid: undefined,
+        expiresAt: undefined,
+        mode: undefined,
+      });
+    });
+  });
+
   describe('JWT generation', () => {
     it('should generate JWT with correct parameters for all API calls', async () => {
       utils.generateJWT.mockResolvedValue('test-jwt-token');
