@@ -376,6 +376,92 @@ async function routeVoiceCall(contactId, payload, configData) {
   return responseVal.data;
 }
 
+async function reserveRoutableNumber(parameters, attributes, configData) {
+  const params = parameters || {};
+  const attrs = attributes || {};
+
+  const fromNumber = params.fromNumber;
+  const toNumber = params.toNumber;
+
+  if (!fromNumber || !utils.isValidE164(fromNumber)) {
+    throw new Error(
+      `Invalid or missing fromNumber: ${fromNumber}. Must be E.164 format.`
+    );
+  }
+
+  if (!toNumber || !utils.isValidE164(toNumber)) {
+    throw new Error(
+      `Invalid or missing toNumber: ${toNumber}. Must be E.164 format.`
+    );
+  }
+
+  const countryCode = params.countryCode || attrs.countryCode;
+  if (!countryCode) {
+    throw new Error("countryCode is required for reserveRoutableNumber");
+  }
+
+  const callId = params.callId || attrs.callId || null;
+  const transactionId = params.transactionId || attrs.transactionId || null;
+
+  const context = {
+    scrt2Domain: new URL(configData.scrtEndpointBase).origin,
+    toNumber,
+  };
+  if (callId) context.callId = callId;
+  if (transactionId) context.transactionId = transactionId;
+
+  const payload = { countryCode, fromNumber, context };
+
+  SCVLoggingUtil.info({
+    message: "reserveRoutableNumber request created",
+    context: { countryCode: payload.countryCode, fromNumber: payload.fromNumber },
+  });
+
+  const jwt = await utils.generateJWT({
+    orgId: configData.orgId,
+    callCenterApiName: configData.callCenterApiName,
+    expiresIn: configData.tokenValidFor,
+    privateKey: configData.privateKey,
+  });
+
+  const response = await axiosWrapper.getScrtEndpoint(configData)
+    .post("/voiceCalls/reserveRoutableNumber", payload, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN,
+      },
+    })
+    .catch((error) => {
+      const status = error.response?.status;
+      const retryAfter = error.response?.headers?.["retry-after"];
+      SCVLoggingUtil.error({
+        message: "Error reserving routable number",
+        context: {
+          status,
+          retryAfter,
+          data: error.response?.data,
+          error: error.message,
+        },
+      });
+      const err = new Error("Error reserving routable number");
+      err.status = status;
+      err.retryAfter = retryAfter;
+      err.responseData = error.response?.data;
+      throw err;
+    });
+
+  const data = response.data || {};
+  const handle = data.handle || {};
+  return {
+    statusCode: 200,
+    routableNumber: handle.routableNumber,
+    uid: handle.uid,
+    expiresAt: handle.expiresAt,
+    mode: data.mode,
+  };
+}
+
 module.exports = {
   createVoiceCall,
   updateVoiceCall,
@@ -384,5 +470,6 @@ module.exports = {
   cancelOmniFlowExecution,
   rerouteFlowExecution,
   callbackExecution,
-  routeVoiceCall
+  routeVoiceCall,
+  reserveRoutableNumber,
 };
