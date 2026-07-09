@@ -102,6 +102,37 @@ describe('constructFlowInputParams', () => {
     });
 });
 
+describe("isValidE164", () => {
+  it("should return true for valid E.164 numbers", () => {
+    expect(utils.isValidE164("+11800999932")).toBe(true);
+    expect(utils.isValidE164("+442071234567")).toBe(true);
+    expect(utils.isValidE164("+15551234567")).toBe(true);
+  });
+
+  it("should return false for numbers without leading +", () => {
+    expect(utils.isValidE164("11800999932")).toBe(false);
+  });
+
+  it("should return false for numbers starting with +0", () => {
+    expect(utils.isValidE164("+01234567890")).toBe(false);
+  });
+
+  it("should return false for numbers exceeding 15 digits", () => {
+    expect(utils.isValidE164("+1234567890123456")).toBe(false);
+  });
+
+  it("should return false for non-string input", () => {
+    expect(utils.isValidE164(null)).toBe(false);
+    expect(utils.isValidE164(undefined)).toBe(false);
+    expect(utils.isValidE164(12345)).toBe(false);
+  });
+
+  it("should return false for empty string", () => {
+    expect(utils.isValidE164("")).toBe(false);
+    expect(utils.isValidE164("+")).toBe(false);
+  });
+});
+
 describe('getCallAttributes', () => {
     it('should filter attributes that start with "sfdc-" prefix, ignore other prefix, handle case, support other characters and data types', () => {
         const input = {
