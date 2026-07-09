@@ -228,6 +228,13 @@ exports.handler = async (event) => {
         };
       }
       break;
+    case "reserveRoutableNumber":
+      result = await api.reserveRoutableNumber(
+        event.Details.Parameters,
+        event.Details.ContactData?.Attributes,
+        configData
+      );
+      break;
     case "getJwtToken":
       const jwt = await utils.generateJWT({
         orgId: configData.orgId,

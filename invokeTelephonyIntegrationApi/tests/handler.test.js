@@ -878,6 +878,98 @@ describe("handler.js", () => {
       });
     });
 
+    describe("reserveRoutableNumber", () => {
+      it("should call reserveRoutableNumber with parameters, attributes, and configData", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "reserveRoutableNumber",
+              fromNumber: "+11800999932",
+              toNumber: "+15551234567",
+              countryCode: "US",
+              callId: "0LQLT000001jmnt",
+              transactionId: "tx-123",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              Attributes: {
+                someAttr: "someValue",
+              },
+            },
+          },
+        };
+        const mockResponse = {
+          statusCode: 200,
+          routableNumber: "+14155560999",
+          uid: "uid-1",
+          expiresAt: "2026-07-09T12:00:00Z",
+          mode: "number",
+        };
+        api.reserveRoutableNumber.mockResolvedValue(mockResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.reserveRoutableNumber).toHaveBeenCalledWith(
+          event.Details.Parameters,
+          event.Details.ContactData.Attributes,
+          mockSecretConfig
+        );
+        expect(result).toEqual(mockResponse);
+      });
+
+      it("should pass undefined attributes when ContactData has no Attributes", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "reserveRoutableNumber",
+              fromNumber: "+11800999932",
+              toNumber: "+15551234567",
+              countryCode: "US",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockResponse = { statusCode: 200, routableNumber: "+1" };
+        api.reserveRoutableNumber.mockResolvedValue(mockResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.reserveRoutableNumber).toHaveBeenCalledWith(
+          event.Details.Parameters,
+          undefined,
+          mockSecretConfig
+        );
+        expect(result).toEqual(mockResponse);
+      });
+
+      it("should propagate errors from reserveRoutableNumber", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "reserveRoutableNumber",
+              fromNumber: "invalid",
+              toNumber: "+15551234567",
+              countryCode: "US",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+            },
+          },
+        };
+        const mockError = new Error("Invalid or missing fromNumber");
+        api.reserveRoutableNumber.mockRejectedValue(mockError);
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          "Invalid or missing fromNumber"
+        );
+      });
+    });
+
     describe("secret configuration", () => {
       it("should use secret name from call attributes when provided", async () => {
         const event = {
