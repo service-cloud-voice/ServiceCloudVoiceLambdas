@@ -64,8 +64,11 @@ exports.handler = async (event) => {
 
   let result = {};
   let voiceCallFieldValues;
-  const { methodName, fieldValues, contactId } = event.Details.Parameters;
+  const { methodName, fieldValues, contactId, agentARN } = event.Details.Parameters;
   const contactIdValue = contactId || event.Details.ContactData.ContactId;
+  // for outbound calls, amazon creates 2 contact events when setDisconnectFlow block is hit. we need to take the one which is stored as vendorCallkey in the database.
+  const initialContactIdValue = contactId || event.Details.ContactData.InitialContactId;
+  const toPhoneNumberValue = event.Details.ContactData?.SystemEndpoint?.Address;
   const callOrigin = event.Details.ContactData?.Attributes?.callOrigin || "";
   
   // Extract secret name from call attributes with precedence over environment variable
@@ -227,6 +230,43 @@ exports.handler = async (event) => {
           contactId: contactIdValue
         };
       }
+      break;
+    case "getVoicemailDrop":
+      result = await api.getVoicemailDrop(initialContactIdValue, configData);
+      break;
+    case "getDefaultOutboundPhoneNumber":
+      if (!agentARN) {
+        SCVLoggingUtil.error({
+          message: "agentARN is required for getDefaultOutboundPhoneNumber",
+          context: { contactId: contactIdValue },
+        });
+        throw new Error("agentARN is required for getDefaultOutboundPhoneNumber");
+      }
+      result = await api.getDefaultOutboundPhoneNumber(agentARN, configData);
+      break;
+    case "getVoicemailGreeting":
+      if (!toPhoneNumberValue) {
+        SCVLoggingUtil.error({
+          message: "toPhoneNumber is required for getVoicemailGreeting",
+          context: { contactId: contactIdValue },
+        });
+        throw new Error("toPhoneNumber is required for getVoicemailGreeting");
+      }
+      result = await api.getVoicemailGreeting(toPhoneNumberValue, configData);
+      break;
+    case "reserveRoutableNumber":
+      result = await api.reserveRoutableNumber(
+        event.Details.Parameters,
+        event.Details.ContactData?.Attributes,
+        configData
+      );
+      break;
+    case "createVoiceCallContext":
+      result = await api.createVoiceCallContext(
+        event.Details.Parameters,
+        event.Details.ContactData?.Attributes,
+        configData
+      );
       break;
     case "getJwtToken":
       const jwt = await utils.generateJWT({

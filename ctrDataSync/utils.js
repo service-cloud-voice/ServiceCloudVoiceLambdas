@@ -56,7 +56,7 @@ function transformCTR(ctr) {
     voiceCall.secretName = ctr?.Attributes?.secretName
   }
   if (ctr.Agent) {
-    voiceCall.acceptTime = ctr.Agent.ConnectedToAgentTimestamp;
+    voiceCall.acceptTime = ctr.Agent.ConnectedToAgentTimestamp || "";
     voiceCall.totalHoldDuration = ctr.Agent.CustomerHoldDuration;
     voiceCall.longestHoldDuration = ctr.Agent.LongestHoldDuration;
     voiceCall.agentInteractionDuration = ctr.Agent.AgentInteractionDuration;

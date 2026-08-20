@@ -7,8 +7,8 @@
   "dependencies": {
     "aws-sdk": "2.1354.0",
     "winston": "3.2.1",
-    "axios": "1.13.6",
-    "axios-logger": "2.5.0",
+    "axios": "1.18.1",
+    "axios-logger": "2.8.1",
     "jsonwebtoken": "9.0.3",
     "uuid": "3.4.0"
   },

@@ -12,8 +12,6 @@ exports.handler = async (event) => {
     context: { payload: event },
   });
 
-  const bulkSendMessagesPayload = {};
-  bulkSendMessagesPayload.entries = [];
   const contactIdToMessagesMap = {};
   const contactIdToSecretMap = {}
   if (event && event.Records) {
@@ -98,27 +96,30 @@ exports.handler = async (event) => {
     // Iterate through contactIdMessagesMap and construct the request payload for BulkSendMessages
     for(var secretName in secretNameToContactIdMap){
       var contactIds = secretNameToContactIdMap[secretName];
+      const bulkSendMessagesPayload = {};
+      bulkSendMessagesPayload.entries = [];
+      bulkSendMessagesPayload.secretName = secretName;
+
       // here we are making sure that we are first getting secretName and then grouping contactIds associated with that secretName.
       for (var key of contactIds) {
-      const bulkSendMessagePayload = {};
-      bulkSendMessagePayload.vendorCallKey = key;
-      bulkSendMessagePayload.messages = contactIdToMessagesMap[key];
+        const bulkSendMessagePayload = {};
+        bulkSendMessagePayload.vendorCallKey = key;
+        bulkSendMessagePayload.messages = contactIdToMessagesMap[key];
 
-      // Add to the bulkSendMessagesPayload.entries array
-      bulkSendMessagesPayload.secretName = secretName
-      bulkSendMessagesPayload.entries.push(bulkSendMessagePayload);
-    }
-    }
+        // Add to the bulkSendMessagesPayload.entries array
+        bulkSendMessagesPayload.entries.push(bulkSendMessagePayload);
+      }
 
-    SCVLoggingUtil.debug({
-      message:
-          "bulkSendMessagesPayload details",
-      context: { contactId: bulkSendMessagesPayload },
-    });
+      SCVLoggingUtil.debug({
+        message:
+            "bulkSendMessagesPayload details",
+        context: { contactId: bulkSendMessagesPayload },
+      });
 
-    //Call the BulkSendMessages API
-    if (bulkSendMessagesPayload.entries.length > 0) {
-      promises.push(api.sendMessagesInBulk(bulkSendMessagesPayload));
+      //Call the BulkSendMessages API
+      if (bulkSendMessagesPayload.entries.length > 0) {
+        promises.push(api.sendMessagesInBulk(bulkSendMessagesPayload));
+      }
     }
   }
 

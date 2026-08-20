@@ -878,6 +878,230 @@ describe("handler.js", () => {
       });
     });
 
+    describe("getVoicemailDrop", () => {
+      it("should get voicemail drop with InitialContactId", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getVoicemailDrop",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-initial-contact-id",
+            },
+          },
+        };
+
+        const mockResponse = { recordingUrl: "https://s3.amazonaws.com/recording.wav" };
+        api.getVoicemailDrop.mockResolvedValue(mockResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.getVoicemailDrop).toHaveBeenCalledWith(
+          "test-initial-contact-id",
+          mockSecretConfig
+        );
+        expect(result).toEqual(mockResponse);
+      });
+
+      it("should use contactId from parameters when provided for getVoicemailDrop", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getVoicemailDrop",
+              contactId: "custom-contact-id",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-initial-contact-id",
+            },
+          },
+        };
+
+        const mockResponse = { recordingUrl: "https://s3.amazonaws.com/recording.wav" };
+        api.getVoicemailDrop.mockResolvedValue(mockResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.getVoicemailDrop).toHaveBeenCalledWith(
+          "custom-contact-id",
+          mockSecretConfig
+        );
+        expect(result).toEqual(mockResponse);
+      });
+
+      it("should handle error when getting voicemail drop", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getVoicemailDrop",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+            },
+          },
+        };
+
+        api.getVoicemailDrop.mockRejectedValue(
+          new Error("Error getting voicemail drop")
+        );
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          "Error getting voicemail drop"
+        );
+      });
+    });
+
+    describe("getDefaultOutboundPhoneNumber", () => {
+      it("should get default outbound phone number with agentARN from event Details Parameters", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getDefaultOutboundPhoneNumber",
+              agentARN: "arn:aws:connect:us-east-1:123456789012:instance/xxx/agent/yyy",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+            },
+          },
+        };
+
+        const mockResponse = { phoneNumber: "+15551234567" };
+        api.getDefaultOutboundPhoneNumber.mockResolvedValue(mockResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.getDefaultOutboundPhoneNumber).toHaveBeenCalledWith(
+          "arn:aws:connect:us-east-1:123456789012:instance/xxx/agent/yyy",
+          mockSecretConfig
+        );
+        expect(result).toEqual(mockResponse);
+      });
+
+      it("should throw when agentARN is missing for getDefaultOutboundPhoneNumber", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getDefaultOutboundPhoneNumber",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+            },
+          },
+        };
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          "agentARN is required for getDefaultOutboundPhoneNumber"
+        );
+        expect(api.getDefaultOutboundPhoneNumber).not.toHaveBeenCalled();
+      });
+
+      it("should handle error when getting default outbound phone number", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getDefaultOutboundPhoneNumber",
+              agentARN: "arn:aws:connect:us-east-1:123456789012:instance/xxx/agent/yyy",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+            },
+          },
+        };
+
+        api.getDefaultOutboundPhoneNumber.mockRejectedValue(
+          new Error("Error getting default outbound phone number")
+        );
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          "Error getting default outbound phone number"
+        );
+      });
+    });
+
+    describe("getVoicemailGreeting", () => {
+      it("should get voicemail greeting with toPhoneNumber from ContactData.SystemEndpoint.Address", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getVoicemailGreeting",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+              SystemEndpoint: { Address: "+15553334444" },
+            },
+          },
+        };
+
+        const mockResponse = { greetingUrl: "https://s3.example.com/greeting.wav" };
+        api.getVoicemailGreeting.mockResolvedValue(mockResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.getVoicemailGreeting).toHaveBeenCalledWith(
+          "+15553334444",
+          mockSecretConfig
+        );
+        expect(result).toEqual(mockResponse);
+      });
+
+      it("should throw when toPhoneNumber is missing for getVoicemailGreeting (no SystemEndpoint.Address)", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getVoicemailGreeting",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+            },
+          },
+        };
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          "toPhoneNumber is required for getVoicemailGreeting"
+        );
+        expect(api.getVoicemailGreeting).not.toHaveBeenCalled();
+      });
+
+      it("should handle error when getting voicemail greeting", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: {
+              methodName: "getVoicemailGreeting",
+            },
+            ContactData: {
+              ContactId: "test-contact-id",
+              InitialContactId: "test-contact-id",
+              SystemEndpoint: { Address: "+15551234567" },
+            },
+          },
+        };
+
+        api.getVoicemailGreeting.mockRejectedValue(
+          new Error("Error getting voicemail greeting")
+        );
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          "Error getting voicemail greeting"
+        );
+      });
+    });
+
     describe("secret configuration", () => {
       it("should use secret name from call attributes when provided", async () => {
         const event = {
@@ -1002,6 +1226,174 @@ describe("handler.js", () => {
       });
 
 
+    });
+
+    describe("reserveRoutableNumber", () => {
+      it("should delegate to api with parameters, attributes and configData, and return its result", async () => {
+        const parameters = {
+          methodName: "reserveRoutableNumber",
+          countryCode: "US",
+          fromNumber: "+11800999932",
+          toNumber: "+15551234567",
+          callId: "0LQLT000001jmnt",
+          transactionId: "tx-123",
+        };
+        const attributes = { someAttr: "x" };
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: parameters,
+            ContactData: { ContactId: "test-contact-id", Attributes: attributes },
+          },
+        };
+        const shapedResponse = {
+          statusCode: 200,
+          routableNumber: "+14155560999",
+          uid: "uid-1",
+          expiresAt: "2026-06-23T00:00:00Z",
+          mode: "number",
+        };
+        api.reserveRoutableNumber.mockResolvedValue(shapedResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.reserveRoutableNumber).toHaveBeenCalledWith(
+          parameters,
+          attributes,
+          mockSecretConfig
+        );
+        expect(result).toEqual(shapedResponse);
+      });
+
+      it("should pass undefined attributes when ContactData has no Attributes", async () => {
+        const parameters = {
+          methodName: "reserveRoutableNumber",
+          countryCode: "US",
+          fromNumber: "+11800999932",
+          toNumber: "+15551234567",
+        };
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: parameters,
+            ContactData: { ContactId: "test-contact-id" },
+          },
+        };
+        api.reserveRoutableNumber.mockResolvedValue({
+          statusCode: 200,
+          routableNumber: "+14155560999",
+          uid: "u",
+          expiresAt: "z",
+          mode: "number",
+        });
+
+        await handler.handler(event);
+
+        expect(api.reserveRoutableNumber).toHaveBeenCalledWith(
+          parameters,
+          undefined,
+          mockSecretConfig
+        );
+      });
+
+      it("should propagate errors thrown by the API", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: { methodName: "reserveRoutableNumber" },
+            ContactData: { ContactId: "test-contact-id" },
+          },
+        };
+        api.reserveRoutableNumber.mockRejectedValue(
+          new Error("Invalid or missing fromNumber: undefined. Must be E.164 format.")
+        );
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          /Invalid or missing fromNumber/
+        );
+      });
+    });
+
+    describe("createVoiceCallContext", () => {
+      it("should delegate to api with parameters, attributes and configData, and return its result", async () => {
+        const parameters = {
+          methodName: "createVoiceCallContext",
+          fromNumber: "+14155551111",
+          toNumber: "+15551234567",
+          callId: "0LQxx0000004ABcGAM",
+        };
+        const attributes = { someAttr: "x" };
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: parameters,
+            ContactData: { ContactId: "test-contact-id", Attributes: attributes },
+          },
+        };
+        const shapedResponse = {
+          statusCode: 200,
+          correlationId: "a3f2c4d8-9b7e-4c6f-8e1d-2f5a9c3b7e4d",
+          expiresAt: "2026-07-15T18:45:11Z",
+          mode: "correlationID",
+        };
+        api.createVoiceCallContext.mockResolvedValue(shapedResponse);
+
+        const result = await handler.handler(event);
+
+        expect(api.createVoiceCallContext).toHaveBeenCalledWith(
+          parameters,
+          attributes,
+          mockSecretConfig
+        );
+        expect(result).toEqual(shapedResponse);
+      });
+
+      it("should pass undefined attributes when ContactData has no Attributes", async () => {
+        const parameters = {
+          methodName: "createVoiceCallContext",
+          fromNumber: "+14155551111",
+          toNumber: "+15551234567",
+          callId: "0LQxx0000004ABcGAM",
+        };
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: parameters,
+            ContactData: { ContactId: "test-contact-id" },
+          },
+        };
+        api.createVoiceCallContext.mockResolvedValue({
+          statusCode: 200,
+          correlationId: "c",
+          expiresAt: "z",
+          mode: "correlationID",
+        });
+
+        await handler.handler(event);
+
+        expect(api.createVoiceCallContext).toHaveBeenCalledWith(
+          parameters,
+          undefined,
+          mockSecretConfig
+        );
+      });
+
+      it("should propagate errors thrown by the API", async () => {
+        const event = {
+          "detail-type": "test",
+          Details: {
+            Parameters: { methodName: "createVoiceCallContext" },
+            ContactData: { ContactId: "test-contact-id" },
+          },
+        };
+        api.createVoiceCallContext.mockRejectedValue(
+          new Error("Invalid or missing fromNumber: undefined. Must be E.164 format.")
+        );
+
+        await expect(handler.handler(event)).rejects.toThrow(
+          /Invalid or missing fromNumber/
+        );
+      });
     });
 
     describe("getJwtToken", () => {

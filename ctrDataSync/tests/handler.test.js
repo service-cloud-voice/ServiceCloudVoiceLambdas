@@ -164,4 +164,21 @@ describe('Lambda handler', () => {
 			context: {},
 		});
 	});
+
+	it('should pass acceptTime as empty string to telephony API when ConnectedToAgentTimestamp is null', async () => {
+		const mockInvoke = jest.fn().mockReturnValue({ promise: () => Promise.resolve({}) });
+		jest.isolateModules(() => {
+			jest.doMock('aws-sdk', () => ({ Lambda: jest.fn(() => ({ invoke: mockInvoke })) }));
+			const ctr = JSON.stringify({
+				ContactId: "test-id", DisconnectReason: "AGENT_HUNGUP",
+				InitiationMethod: "INBOUND", Channel: "VOICE",
+				Agent: { ConnectedToAgentTimestamp: null }
+			});
+			const event = { Records: [{ kinesis: { data: Buffer.from(ctr).toString('base64') } }] };
+			require('../handler').handler(event).then(() => {
+				const payload = JSON.parse(mockInvoke.mock.calls[0][0].Payload);
+				expect(payload.Details.Parameters.fieldValues.acceptTime).toBe("");
+			});
+		});
+	});
 });

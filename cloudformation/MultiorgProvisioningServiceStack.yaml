@@ -86,29 +86,7 @@ Resources:
         - !Ref LambdaS3AccessPolicyResource
       RoleName: !Sub "${lambdaPrefix}-InvokeTelephonyIntegrationApiFunctionRole"
       Description: Creates VoiceCall records via Salesforce Telephony API
-  
-  MultiorgInvokeVfsIntegrationApiFunctionRoleResource:
-    Type: AWS::IAM::Role
-    Properties:
-      PermissionsBoundary:
-        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Action:
-              - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-                - lambda.amazonaws.com
-      ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/scv/SCVSSMAccessPolicy"
-        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/scv/SCVSecretsManagerAccessPolicy"
-        - !Ref LambdaS3AccessPolicyResource
-      RoleName: !Sub "${lambdaPrefix}-InvokeVfsIntegrationApiFunctionRole"
-      Description: Retrieves voicemail recording URLs via VFS API
-  
+
   MultiorgContactDataSyncFunctionRoleResource:
     Type: AWS::IAM::Role
     Properties:
@@ -496,17 +474,6 @@ Resources:
       Description: MultiorgInvokeTelephonyIntegrationApiFunction node modules
       LayerName: !Sub '${lambdaPrefix}-MultiorgInvokeTelephonyIntegrationApiFunctionLayer'
 
-  MultiorgInvokeVfsIntegrationApiFunctionLayer:
-    Type: 'AWS::Lambda::LayerVersion'
-    Properties:
-      CompatibleRuntimes:
-        - nodejs22.x
-      Content:
-        S3Bucket:  !Sub '${S3BucketForScvResources}-${AWS::Region}'
-        S3Key: !Sub '${SalesforceRelease}/invokeVfsIntegrationApiFunctionLayer${Version}'
-      Description: MultiorgInvokeVfsIntegrationApiFunction node modules
-      LayerName: !Sub '${lambdaPrefix}-MultiorgInvokeVfsIntegrationApiFunctionLayer'
-
   MultiorgHandleContactEventsFunctionLayer:
     Type: AWS::Lambda::LayerVersion
     Properties:
@@ -659,27 +626,6 @@ Resources:
         - !Ref MultiorgInvokeTelephonyIntegrationApiFunctionLayer
       Description: Creates VoiceCall records and handles OmniChannel routing
 
-  MultiorgInvokeVfsIntegrationApiFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri:
-        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
-        Key: !Sub "${SalesforceRelease}/invokeVfsIntegrationApi${Version}"
-      Environment:
-        Variables:
-          LOG_LEVEL: "info"
-          SECRET_CACHE_S3: !Sub "${S3BucketForTenantResources}/secret_cache"
-      Handler: handler.handler
-      AutoPublishAlias: active
-      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
-      Role: !GetAtt MultiorgInvokeVfsIntegrationApiFunctionRoleResource.Arn
-      Timeout: 8
-      Runtime: nodejs22.x
-      FunctionName: !Sub "${lambdaPrefix}-MultiorgInvokeVfsIntegrationApiFunction"
-      Layers:
-        - !Ref MultiorgInvokeVfsIntegrationApiFunctionLayer
-      Description: Retrieves voicemail recording URLs
-      
   MultiorgHandleContactEventsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -895,7 +841,6 @@ Resources:
     DependsOn:
       - MultiorgInvokeSalesforceRestApiFunction
       - MultiorgInvokeTelephonyIntegrationApiFunction
-      - MultiorgInvokeVfsIntegrationApiFunction
       - MultiorgCTRDataSyncFunction
       - MultiorgContactDataSyncFunction
       - MultiorgKvsConsumerTrigger
@@ -912,7 +857,6 @@ Resources:
         S3BucketForScvResources: !Ref S3BucketForScvResources
         RealtimeAlertRole: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVRealtimeAlertRole"
         InvokeTelephonyIntegrationApiFunctionName: !Sub "${lambdaPrefix}-MultiorgInvokeTelephonyIntegrationApiFunction"
-        InvokeVfsIntegrationApiFunctionName: !Sub "${lambdaPrefix}-MultiorgInvokeVfsIntegrationApiFunction"
         InvokeSalesforceRestApiFunctionName: !Sub "${lambdaPrefix}-MultiorgInvokeSalesforceRestApiFunction"
         CTRDataSyncFunctionName: !Sub "${lambdaPrefix}-MultiorgCTRDataSyncFunction"
         ContactDataSyncFunctionName: !Sub "${lambdaPrefix}-MultiorgContactDataSync"
@@ -1042,13 +986,6 @@ Resources:
     Properties:
       InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
       IntegrationArn: !GetAtt MultiorgInvokeTelephonyIntegrationApiFunction.Arn
-      IntegrationType: LAMBDA_FUNCTION
-
-  MultiorgInvokeVfsIntegrationApiIntegrationAssociationResource:
-    Type: AWS::Connect::IntegrationAssociation
-    Properties:
-      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
-      IntegrationArn: !GetAtt MultiorgInvokeVfsIntegrationApiFunction.Arn
       IntegrationType: LAMBDA_FUNCTION
 
   MultiorgKvsConsumerTriggerIntegrationAssociationResource:

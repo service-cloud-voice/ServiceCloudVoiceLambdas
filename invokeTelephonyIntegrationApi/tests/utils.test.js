@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 jest.mock('uuid/v1');
 const uuid = require('uuid');
 
-afterEach(() => {
+afterEach(() => {    
   jest.clearAllMocks();
 });
 
@@ -102,6 +102,14 @@ describe('constructFlowInputParams', () => {
     });
 });
 
+describe('generateTransactionId', () => {
+    it('should return the value produced by uuid()', () => {
+        jest.spyOn(uuid, 'v1').mockReturnValue('test-transaction-id');
+        const result = utils.generateTransactionId();
+        expect(result).toBe('test-transaction-id');
+    });
+});
+
 describe('getCallAttributes', () => {
     it('should filter attributes that start with "sfdc-" prefix, ignore other prefix, handle case, support other characters and data types', () => {
         const input = {
@@ -132,8 +140,8 @@ describe('getCallAttributes', () => {
     it('should handle empty input object', () => {
         const input = {};
         const expected = JSON.stringify({});
-  
+        
         const result = utils.getCallAttributes(input);
         expect(result).toBe(expected);
     });
-});
+}); 

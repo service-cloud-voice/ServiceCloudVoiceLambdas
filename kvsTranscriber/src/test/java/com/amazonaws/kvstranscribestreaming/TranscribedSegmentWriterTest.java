@@ -434,4 +434,61 @@ public class TranscribedSegmentWriterTest {
             server.stop(0);
         }
     }
+
+    /**
+     * Test to verify that OutputStreamWriter properly flushes buffered data to the server.
+     * This test catches the regression from W-21432978 where removing osw.close() caused
+     * buffered data to never be sent, resulting in HTTP 400 errors from the server.
+     *
+     * Without proper flush/close of the OutputStreamWriter, the JSON payload remains in
+     * the writer's buffer and is never written to the underlying OutputStream, causing
+     * the server to receive incomplete/malformed JSON which it rejects with HTTP 400.
+     */
+    @Test
+    void sendMessage_properlyFlushesBufferedData() throws Exception {
+        // Create server that validates JSON structure like production
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/", (HttpExchange exchange) -> {
+            try {
+                String body = new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+
+                // Parse as JSON - this fails if buffer wasn't flushed and JSON is incomplete
+                org.json.simple.parser.JSONParser parser = new org.json.simple.parser.JSONParser();
+                org.json.simple.JSONObject json = (org.json.simple.JSONObject) parser.parse(body);
+
+                // Validate required fields exist
+                if (json.containsKey("messageId") && json.containsKey("content") &&
+                    json.containsKey("participantId") && json.containsKey("senderType")) {
+                    exchange.sendResponseHeaders(HTTP_OK, 0);
+                } else {
+                    exchange.sendResponseHeaders(HTTP_BAD_REQUEST, 0);
+                }
+            } catch (Exception e) {
+                // Malformed/incomplete JSON = 400 (like production behavior)
+                exchange.sendResponseHeaders(HTTP_BAD_REQUEST, 0);
+            }
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            String baseUrl = "http://localhost:" + server.getAddress().getPort() + "/telephony/v1";
+            ConfigManager.SecretConfig mockConfig = createMockConfig(baseUrl);
+            ConnectClient mockConnectClient = mock(ConnectClient.class);
+
+            try (MockedStatic<ConnectClient> connectMock = Mockito.mockStatic(ConnectClient.class)) {
+                connectMock.when(ConnectClient::create).thenReturn(mockConnectClient);
+                TranscribedSegmentWriter tsw = new TranscribedSegmentWriter(
+                        TEST_INSTANCE_ARN, TEST_VOICE_CALL_ID, true, TEST_AUDIO_START, TEST_CUSTOMER_PHONE, mockConfig);
+
+                tsw.sendMessage(TEST_MESSAGE, TEST_MESSAGE_ID, TEST_AUDIO_START, TEST_AUDIO_START + 1000);
+
+                // If we get here without HTTP 400, the JSON was valid and complete
+                // Without close/flush, the JSON would be incomplete and server would return 400
+                verify(mockConnectClient, never()).updateContactAttributes(any(UpdateContactAttributesRequest.class));
+            }
+        } finally {
+            server.stop(0);
+        }
+    }
 }

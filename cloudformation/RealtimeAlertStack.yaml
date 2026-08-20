@@ -30,9 +30,6 @@ Parameters:
   InvokeTelephonyIntegrationApiFunctionName:
     Description: InvokeTelephonyIntegrationApi Lambda Function Name.
     Type: String
-  InvokeVfsIntegrationApiFunctionName:
-    Description: InvokeVfsIntegrationApi Lambda Function Name.
-    Type: String
   InvokeSalesforceRestApiFunctionName:
     Description: InvokeSalesforceRestApiFunctionName Lambda Function Name.
     Type: String
@@ -319,50 +316,6 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: !Ref InvokeTelephonyIntegrationApiFunctionName
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: "notBreaching"
-
-  InvokeVfsIntegrationApiFunctionErrorsAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub "SCV Lambda ${InvokeVfsIntegrationApiFunctionName} Errors"
-      AlarmDescription: !Sub "The number of invocations of ${InvokeVfsIntegrationApiFunctionName} that resulted in a function error. Function errors include exceptions thrown by your code and exceptions thrown by the Lambda runtime."
-      Namespace: AWS/Lambda
-      MetricName: Errors
-      Statistic: Sum
-      Unit: Count
-      AlarmActions: !If
-        - CreateEventTriggers
-        - - !Ref RealtimeAlertAlarmSnsTopic
-        - !Ref AWS::NoValue
-      Period: 60
-      Threshold: 3
-      EvaluationPeriods: 1
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InvokeVfsIntegrationApiFunctionName
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: "notBreaching"
-  InvokeVfsIntegrationApiFunctionThrottlesAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      ActionsEnabled: false
-      AlarmName: !Sub "SCV Lambda ${InvokeVfsIntegrationApiFunctionName} Throttles"
-      AlarmDescription: !Sub "The number of invocation requests of ${InvokeVfsIntegrationApiFunctionName} that are throttled. Review concurrent executions quota for the region, or the reserved concurrency limit that you configured on the function."
-      Namespace: AWS/Lambda
-      MetricName: Throttles
-      Statistic: Sum
-      Unit: Count
-      AlarmActions: !If
-        - CreateEventTriggers
-        - - !Ref RealtimeAlertAlarmSnsTopic
-        - !Ref AWS::NoValue
-      Period: 60
-      Threshold: 5
-      EvaluationPeriods: 1
-      Dimensions:
-        - Name: FunctionName
-          Value: !Ref InvokeVfsIntegrationApiFunctionName
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: "notBreaching"
 
@@ -726,7 +679,7 @@ Resources:
   ServiceCloudVoiceLambdaDashboard:
     Type: "AWS::CloudWatch::Dashboard"
     Properties:
-      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunctionName}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunctionName}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunctionName}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriberName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriberName}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTriggerName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTriggerName}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunctionName}"}},{"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunctionName}"}},{"type": "metric","x": 6,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailAudioProcessingFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailAudioProcessingFunctionName}"}},{"type": "metric","x": 12,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailPackagingFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailPackagingFunctionName}"}},{"type": "metric","x": 0,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailTranscribeFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailTranscribeFunctionName}"}}, {"type": "metric","x": 6,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactDataSyncFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactDataSyncFunctionName}"}},{"type": "metric","x": 12,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeVfsIntegrationApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeVfsIntegrationApiFunctionName}"}}]}'
+      DashboardBody: !Sub '{"widgets": [{"type": "metric","x": 0,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeSalesforceRestApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeSalesforceRestApiFunctionName}"}},{"type": "metric","x": 6,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${InvokeTelephonyIntegrationApiFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${InvokeTelephonyIntegrationApiFunctionName}"}},{"type": "metric","x": 12,"y": 0,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${CTRDataSyncFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${CTRDataSyncFunctionName}"}},{"type": "metric","x": 0,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsTranscriberName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsTranscriberName}"}},{"type": "metric","x": 6,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${kvsConsumerTriggerName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${kvsConsumerTriggerName}"}},{"type": "metric","x": 12,"y": 6,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${HandleContactEventsFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${HandleContactEventsFunctionName}"}},{"type": "metric","x": 0,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactLensConsumerFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactLensConsumerFunctionName}"}},{"type": "metric","x": 6,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailAudioProcessingFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailAudioProcessingFunctionName}"}},{"type": "metric","x": 12,"y": 12,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailPackagingFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailPackagingFunctionName}"}},{"type": "metric","x": 0,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${VoiceMailTranscribeFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${VoiceMailTranscribeFunctionName}"}}, {"type": "metric","x": 6,"y": 24,"width": 6,"height": 6,"properties": {"metrics": [["AWS/Lambda","Errors","FunctionName","${ContactDataSyncFunctionName}"],[".","ConcurrentExecutions",".","."],[".","Invocations",".","."],[".","Throttles",".","."]],"view": "timeSeries","stacked": true,"region": "${AWS::Region}","stat": "Sum","period": 300,"title": "${ContactDataSyncFunctionName}"}}]}'
       DashboardName: !If 
         - UseSourceCondition
         - !Sub '${CallCenterApiName}-ServiceCloudVoiceLambdaDashboard'

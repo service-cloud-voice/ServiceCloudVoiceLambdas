@@ -376,6 +376,299 @@ async function routeVoiceCall(contactId, payload, configData) {
   return responseVal.data;
 }
 
+/**
+ * Issue an authenticated GET to the SCRT voiceCalls API and surface a typed result.
+ *
+ * @param {string} path - Path under the SCRT endpoint (already URL-encoded).
+ * @param {object} configData - Configuration data containing orgId, callCenterApiName, privateKey, etc.
+ * @param {object} options
+ * @param {string} options.successMessage - Info-log message on a 2xx response.
+ * @param {string} options.errorMessage - Thrown Error message; also the error-log message when `errorLogMessage` is not set.
+ * @param {string} [options.errorLogMessage] - Overrides the error-log message (use to inject request-specific context).
+ * @param {object} [options.notFoundFallback] - When set, a 404 returns `value` instead of throwing.
+ * @param {string} options.notFoundFallback.message - Info-log message for the 404 path.
+ * @param {object} options.notFoundFallback.context - Logging context for the 404 path.
+ * @param {*}      options.notFoundFallback.value - Value to return on 404.
+ */
+async function fetchFromScrt(path, configData, { successMessage, errorMessage, errorLogMessage, notFoundFallback }) {
+  const jwt = await utils.generateJWT({
+    orgId: configData.orgId,
+    callCenterApiName: configData.callCenterApiName,
+    expiresIn: configData.tokenValidFor,
+    privateKey: configData.privateKey,
+  });
+
+  try {
+    const responseVal = await axiosWrapper.getScrtEndpoint(configData)
+      .get(path, {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+          "Telephony-Provider-Name": vendorFQN,
+        },
+      });
+    SCVLoggingUtil.info({
+      message: successMessage,
+      context: { payload: responseVal },
+    });
+    return responseVal.data;
+  } catch (error) {
+    if (notFoundFallback && error.response?.status === 404) {
+      SCVLoggingUtil.info({
+        message: notFoundFallback.message,
+        context: notFoundFallback.context,
+      });
+      return notFoundFallback.value;
+    }
+    SCVLoggingUtil.error({
+      message: errorLogMessage || errorMessage,
+      context: { payload: error },
+    });
+    throw new Error(errorMessage);
+  }
+}
+
+async function getVoicemailDrop(contactId, configData) {
+  SCVLoggingUtil.info({
+    message: "getVoicemailDrop Request created",
+    context: { contactId: contactId },
+  });
+  return fetchFromScrt(`/voiceCalls/${contactId}/voicemailDrop`, configData, {
+    successMessage: `Successfully retrieved voicemail drop for ${contactId}`,
+    errorMessage: "Error getting voicemail drop",
+    errorLogMessage: `Error getting voicemail drop for ${contactId}`,
+    notFoundFallback: {
+      message: `Voicemail drop not found for ${contactId}`,
+      context: { contactId },
+      value: { recordingUrl: "Not found" },
+    },
+  });
+}
+
+async function getDefaultOutboundPhoneNumber(externalRepId, configData) {
+  SCVLoggingUtil.info({
+    message: "getDefaultOutboundPhoneNumber Request created",
+    context: { externalRepId: externalRepId },
+  });
+  const url = `/voiceCalls/defaultOutboundPhoneNumber?externalRepId=${encodeURIComponent(
+    externalRepId
+  )}`;
+  return fetchFromScrt(url, configData, {
+    successMessage: "Successfully retrieved default outbound phone number",
+    errorMessage: "Error getting default outbound phone number",
+  });
+}
+
+/**
+ * Reserve a routable PSTN number. Resolves and validates inputs from the
+ * contact-flow parameters (with optional fallback to contact attributes),
+ * builds the SCRT2 request body, posts it to /voiceCalls/reserveRoutableNumber,
+ * and returns the response data.
+ *
+ * @param {object} parameters - event.Details.Parameters. Must contain fromNumber (E.164), toNumber, countryCode.
+ * @param {object} [attributes] - event.Details.ContactData.Attributes. Used as fallback for countryCode, callId, transactionId.
+ * @param {object} configData - Configuration data containing orgId, callCenterApiName, privateKey, scrtEndpointBase, tokenValidFor.
+ *
+ * @return {object} - Shaped response: { statusCode, routableNumber, uid, expiresAt, mode }.
+ */
+async function reserveRoutableNumber(parameters, attributes, configData) {
+  const params = parameters || {};
+  const attrs = attributes || {};
+
+  const fromNumber = params.fromNumber;
+  const toNumber = params.toNumber;
+
+  if (!fromNumber || !utils.isValidE164(fromNumber)) {
+    throw new Error(
+      `Invalid or missing fromNumber: ${fromNumber}. Must be E.164 format.`
+    );
+  }
+
+  if (!toNumber || !utils.isValidE164(toNumber)) {
+    throw new Error(
+      `Invalid or missing toNumber: ${toNumber}. Must be E.164 format.`
+    );
+  }
+
+  const countryCode = params.countryCode || attrs.countryCode;
+  if (!countryCode) {
+    throw new Error("countryCode is required for reserveRoutableNumber");
+  }
+
+  const callId = params.callId || attrs.callId || null;
+  const transactionId = params.transactionId || attrs.transactionId || null;
+  const originalFromNumber =
+    params.originalFromNumber || attrs.originalFromNumber || null;
+
+  if (originalFromNumber && !utils.isValidE164(originalFromNumber)) {
+    throw new Error(
+      `Invalid originalFromNumber: ${originalFromNumber}. Must be E.164 format.`
+    );
+  }
+
+  const context = {
+    scrt2Domain: new URL(configData.scrtEndpointBase).origin,
+    toNumber,
+  };
+  if (callId) context.callId = callId;
+  if (transactionId) context.transactionId = transactionId;
+  if (originalFromNumber) context.originalFromNumber = originalFromNumber;
+
+  const payload = { countryCode, fromNumber, context };
+
+  SCVLoggingUtil.info({
+    message: "reserveRoutableNumber request created",
+    context: { countryCode: payload.countryCode, fromNumber: payload.fromNumber },
+  });
+
+  const jwt = await utils.generateJWT({
+    orgId: configData.orgId,
+    callCenterApiName: configData.callCenterApiName,
+    expiresIn: configData.tokenValidFor,
+    privateKey: configData.privateKey,
+  });
+
+  const response = await axiosWrapper.getScrtEndpoint(configData)
+    .post("/voiceCalls/reserveRoutableNumber", payload, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN,
+      },
+    })
+    .catch((error) => {
+      const status = error.response?.status;
+      const retryAfter = error.response?.headers?.["retry-after"];
+      SCVLoggingUtil.error({
+        message: "Error reserving routable number",
+        context: {
+          status,
+          retryAfter,
+          data: error.response?.data,
+          error: error.message,
+        },
+      });
+      const err = new Error("Error reserving routable number");
+      err.status = status;
+      err.retryAfter = retryAfter;
+      err.responseData = error.response?.data;
+      throw err;
+    });
+
+  const data = response.data || {};
+  const handle = data.handle || {};
+  return {
+    statusCode: 200,
+    routableNumber: handle.routableNumber,
+    uid: handle.uid,
+    expiresAt: handle.expiresAt,
+    mode: data.mode,
+  };
+}
+
+/**
+ * Reserve a server-minted correlation-id handle for a voice call transfer.
+ * Posts to /voiceCalls/createVoiceCallContext with the minimal required body:
+ *   { fromNumber, context: { scrt2Domain, toNumber, callId } }
+ *
+ * @param {object} parameters - event.Details.Parameters. Must contain fromNumber (E.164), toNumber.
+ * @param {object} [attributes] - event.Details.ContactData.Attributes. Fallback source for callId, transactionId.
+ * @param {object} configData - orgId, callCenterApiName, privateKey, scrtEndpointBase, tokenValidFor.
+ *
+ * @return {object} - Shaped response: { statusCode, correlationId, expiresAt, mode }.
+ */
+async function createVoiceCallContext(parameters, attributes, configData) {
+  const params = parameters || {};
+  const attrs = attributes || {};
+
+  const fromNumber = params.fromNumber;
+  const toNumber = params.toNumber;
+  const callId = params.callId || attrs.callId || null;
+  const transactionId = params.transactionId || attrs.transactionId || null;
+
+  if (!fromNumber || !utils.isValidE164(fromNumber)) {
+    throw new Error(
+      `Invalid or missing fromNumber: ${fromNumber}. Must be E.164 format.`
+    );
+  }
+  if (!toNumber || !utils.isValidE164(toNumber)) {
+    throw new Error(
+      `Invalid or missing toNumber: ${toNumber}. Must be E.164 format.`
+    );
+  }
+
+  const context = {
+    scrt2Domain: new URL(configData.scrtEndpointBase).origin,
+    toNumber,
+  };
+  if (callId) context.callId = callId;
+  if (transactionId) context.transactionId = transactionId;
+
+  const payload = { fromNumber, context };
+
+  SCVLoggingUtil.info({
+    message: "createVoiceCallContext request created",
+    context: { fromNumber, toNumber, callId },
+  });
+
+  const jwt = await utils.generateJWT({
+    orgId: configData.orgId,
+    callCenterApiName: configData.callCenterApiName,
+    expiresIn: configData.tokenValidFor,
+    privateKey: configData.privateKey,
+  });
+
+  const response = await axiosWrapper.getScrtEndpoint(configData)
+    .post("/voiceCalls/createVoiceCallContext", payload, {
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+        "Telephony-Provider-Name": vendorFQN,
+      },
+    })
+    .catch((error) => {
+      const status = error.response?.status;
+      const retryAfter = error.response?.headers?.["retry-after"];
+      SCVLoggingUtil.error({
+        message: "Error creating voice call context",
+        context: {
+          status,
+          retryAfter,
+          data: error.response?.data,
+          error: error.message,
+        },
+      });
+      const err = new Error("Error creating voice call context");
+      err.status = status;
+      err.retryAfter = retryAfter;
+      err.responseData = error.response?.data;
+      throw err;
+    });
+
+  const data = response.data || {};
+  const handle = data.handle || {};
+  return {
+    statusCode: 200,
+    correlationId: handle.correlationId,
+    expiresAt: handle.expiresAt,
+    mode: data.mode,
+  };
+}
+
+async function getVoicemailGreeting(toPhoneNumber, configData) {
+  SCVLoggingUtil.info({
+    message: "getVoicemailGreeting Request created",
+    context: { toPhoneNumber: toPhoneNumber },
+  });
+  const url = `/voiceCalls/voicemailGreeting?toPhoneNumber=${encodeURIComponent(
+    toPhoneNumber
+  )}`;
+  return fetchFromScrt(url, configData, {
+    successMessage: "Successfully retrieved voicemail greeting",
+    errorMessage: "Error getting voicemail greeting",
+  });
+}
+
 module.exports = {
   createVoiceCall,
   updateVoiceCall,
@@ -384,5 +677,10 @@ module.exports = {
   cancelOmniFlowExecution,
   rerouteFlowExecution,
   callbackExecution,
-  routeVoiceCall
+  routeVoiceCall,
+  getVoicemailDrop,
+  getDefaultOutboundPhoneNumber,
+  getVoicemailGreeting,
+  reserveRoutableNumber,
+  createVoiceCallContext,
 };
