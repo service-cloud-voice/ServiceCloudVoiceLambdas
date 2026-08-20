@@ -58,6 +58,14 @@ exports.handler = async (event) => {
         accessTokenSecretName
       );
       break;
+    case "deleteRecord":
+      result = await api.deleteRecord(
+        utils.formatObjectApiName(objectApiName),
+        recordId,
+        secretName,
+        accessTokenSecretName
+      );
+      break;
     case "queryRecord": {
       result = dispatchQuery(soql, event, secretName, accessTokenSecretName);
       break;
