@@ -68,8 +68,30 @@ function constructFlowInputParams(rawFlowInputParams) {
   return flowInputParams;
 }
 
+/**
+ * Generate a unique transaction identifier.
+ *
+ * @return {string} - A UUID string.
+ */
+function generateTransactionId() {
+  return uuid();
+}
+
+/**
+ * Validate that a phone number is in E.164 format.
+ *
+ * @param {string} phoneNumber - The phone number to validate.
+ *
+ * @return {boolean} - True if the phone number is a valid E.164 string.
+ */
+function isValidE164(phoneNumber) {
+  return typeof phoneNumber === "string" && /^\+[1-9]\d{1,14}$/.test(phoneNumber);
+}
+
 module.exports = {
-  generateJWT,
-  getCallAttributes,
-  constructFlowInputParams,
+    generateJWT,
+    getCallAttributes,
+    constructFlowInputParams,
+    generateTransactionId,
+    isValidE164,
 };

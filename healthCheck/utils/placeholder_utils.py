@@ -260,7 +260,6 @@ def fix_multiorg_role_references(text: str, replacements: Dict[str, str]) -> str
     role_mappings = {
         "MultiorgMigrationRole.Arn": f"arn:{partition}:iam::{account_id}:role/{lambda_prefix}-MultiorgMigrationRole",
         "MultiorgInvokeTelephonyIntegrationApiFunctionRoleResource.Arn": f"arn:{partition}:iam::{account_id}:role/{lambda_prefix}-InvokeTelephonyIntegrationApiFunctionRole",
-        "MultiorgInvokeVfsIntegrationApiFunctionRoleResource.Arn": f"arn:{partition}:iam::{account_id}:role/{lambda_prefix}-InvokeVfsIntegrationApiFunctionRole",
         "MultiorgContactDataSyncFunctionRoleResource.Arn": f"arn:{partition}:iam::{account_id}:role/{lambda_prefix}-ContactDataSyncFunctionRole",
         "MultiorgPostCallAnalysisTriggerFunctionRoleResource.Arn": f"arn:{partition}:iam::{account_id}:role/{lambda_prefix}-PostCallAnalysisTriggerFunctionRole",
         "MultiorgInvokeSalesforceRestApiFunctionRoleResource.Arn": f"arn:{partition}:iam::{account_id}:role/{lambda_prefix}-InvokeSalesforceRestApiFunctionRole",

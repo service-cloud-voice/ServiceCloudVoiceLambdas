@@ -206,9 +206,16 @@ public class TranscribedSegmentWriter {
             con.setRequestProperty("Accept", "application/json");
             con.setRequestProperty("Telephony-Provider-Name", "amazon-connect");
             con.setDoOutput(true);
+
+            SCVLoggingUtil.info("com.amazonaws.kvstranscribestreaming.executeRequest",
+                SCVLoggingUtil.EVENT_TYPE.PERFORMANCE,
+                "Sending HTTP request to SCRT2 endpoint: " + url.getPath(),
+                null);
+
             try (OutputStream os = con.getOutputStream()) {
                 OutputStreamWriter osw = new OutputStreamWriter(os, StandardCharsets.UTF_8);
                 payload.writeJSONString(osw);
+                osw.close();
             }
             return con.getResponseCode();
         } finally {

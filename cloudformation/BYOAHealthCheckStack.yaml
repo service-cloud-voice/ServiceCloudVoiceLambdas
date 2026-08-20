@@ -166,8 +166,6 @@ Resources:
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeSalesforceRestApiFunction:*"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeTelephonyIntegrationApiFunction"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeTelephonyIntegrationApiFunction:*"
-              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeVfsIntegrationApiFunction"
-              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgInvokeVfsIntegrationApiFunction:*"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgKvsConsumerTrigger"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgKvsConsumerTrigger:*"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgPostCallAnalysisTrigger"
@@ -262,7 +260,6 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*PostCallAnalysisTriggerFunctionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*InvokeTelephonyIntegrationApiFunctionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*InvokeSalesforceRestApiFunctionRole"
-                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*InvokeVfsIntegrationApiFunctionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*SSMLambdaExecutionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*SecretConfiguratorLambdaRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*KvsTranscriberRoleResource"
@@ -299,8 +296,6 @@ Resources:
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeTelephonyIntegrationApiFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeTelephonyIntegrationApiFunction:*"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeSalesforceRestApiFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeSalesforceRestApiFunction"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeSalesforceRestApiFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeSalesforceRestApiFunction:*"]
-                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeVfsIntegrationApiFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeVfsIntegrationApiFunction"]
-                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-InvokeVfsIntegrationApiFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-InvokeVfsIntegrationApiFunction:*"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsTranscriber", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsTranscriber"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsTranscriber:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsTranscriber:*"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsConsumerTrigger", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsConsumerTrigger"]

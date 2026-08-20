@@ -101,9 +101,6 @@ Outputs:
   InvokeTelephonyIntegrationApiFunction:
     Description: InvokeTelephonyIntegrationApi Lambda Function ARN
     Value: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
-  InvokeVfsIntegrationApiFunction:
-    Description: InvokeVfsIntegrationApi Lambda Function ARN
-    Value: !GetAtt InvokeVfsIntegrationApiFunction.Arn
   kvsTranscriber:
     Description: kvsTranscriber Lambda Function ARN
     Value: !GetAtt kvsTranscriber.Arn
@@ -220,16 +217,6 @@ Resources:
         S3Key: !Sub '${SalesforceRelease}/invokeTelephonyIntegrationApiFunctionLayer${Version}'
       Description: InvokeTelephonyIntegrationApiFunction node modules
       LayerName: InvokeTelephonyIntegrationApiFunctionLayer
-  InvokeVfsIntegrationApiFunctionLayer:
-    Type: 'AWS::Lambda::LayerVersion'
-    Properties:
-      CompatibleRuntimes:
-        - nodejs22.x
-      Content:
-        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
-        S3Key: !Sub '${SalesforceRelease}/invokeVfsIntegrationApiFunctionLayer${Version}'
-      Description: InvokeVfsIntegrationApiFunction node modules
-      LayerName: InvokeVfsIntegrationApiFunctionLayer
   KVSConsumerTriggerFunctionLayer:
     Type: 'AWS::Lambda::LayerVersion'
     Properties:
@@ -368,26 +355,6 @@ Resources:
       Layers:
         - Ref: InvokeTelephonyIntegrationApiFunctionLayer
       Description: Creates VoiceCall records and handles OmniChannel routing
-  InvokeVfsIntegrationApiFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri:
-        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
-        Key: !Sub "${SalesforceRelease}/invokeVfsIntegrationApi${Version}"
-      Environment:
-        Variables:
-          LOG_LEVEL: "info"
-          SECRET_NAME: !Sub "${CallCenterApiName}-salesforce-secret"
-      Handler: handler.handler
-      AutoPublishAlias: active
-      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
-      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVInvokeVfsIntegrationApiFunctionRole"
-      Timeout: 8
-      Runtime: nodejs22.x
-      FunctionName: !If [LambdaPrefixIsNull, !Sub "${CallCenterApiName}-InvokeVfsIntegrationApiFunction", !Sub "${LambdaPrefix}-InvokeVfsIntegrationApiFunction"]
-      Layers:
-        - Ref: InvokeVfsIntegrationApiFunctionLayer
-      Description: Retrieves voicemail recording URLs
   InvokeSalesforceRestApiFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -526,15 +493,6 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       FunctionName: !Ref InvokeTelephonyIntegrationApiFunction.Alias
-      Action: lambda:InvokeFunction
-      Principal: connect.amazonaws.com
-      SourceAccount: !Sub ${AWS::AccountId}
-      SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
-
-  InvokeVfsIntegrationApiFunctionPermission:  
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref InvokeVfsIntegrationApiFunction.Alias
       Action: lambda:InvokeFunction
       Principal: connect.amazonaws.com
       SourceAccount: !Sub ${AWS::AccountId}
@@ -984,7 +942,6 @@ Resources:
     DependsOn:
       - HandleContactEventsFunction
       - InvokeTelephonyIntegrationApiFunction
-      - InvokeVfsIntegrationApiFunction
       - ContactLensConsumerFunction
       - kvsConsumerTrigger
       - CTRDataSyncFunction
@@ -1001,7 +958,6 @@ Resources:
         S3BucketForScvResources: !Sub "${S3BucketForScvResources}"
         RealtimeAlertRole: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVRealtimeAlertRole"
         InvokeTelephonyIntegrationApiFunctionName: !Ref InvokeTelephonyIntegrationApiFunction
-        InvokeVfsIntegrationApiFunctionName: !Ref InvokeVfsIntegrationApiFunction
         InvokeSalesforceRestApiFunctionName: !Ref InvokeSalesforceRestApiFunction
         CTRDataSyncFunctionName: !Ref CTRDataSyncFunction
         ContactDataSyncFunctionName: !Ref ContactDataSyncFunction
@@ -1048,7 +1004,6 @@ Resources:
       - S3Bucket
       - LiveMediaStreamKmsKey
       - InvokeTelephonyIntegrationApiFunction
-      - InvokeVfsIntegrationApiFunction
       - ContactLensConsumerFunction
       - kvsConsumerTrigger
       - InvokeSalesforceRestApiFunction
@@ -1065,7 +1020,6 @@ Resources:
         ConnectConfiguratorLambdaRole: "SCVConnectConfiguratorLambdaRole"
         KinesisStreamArnForCTR: !GetAtt CTRStream.Arn
         InvokeTelephonyApiLambdaArn: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
-        InvokeVfsApiLambdaArn: !GetAtt InvokeVfsIntegrationApiFunction.Arn
         ContactLensConsumerLambdaArn: !GetAtt ContactLensConsumerFunction.Arn
         KvsConsumerTriggerLambdaArn: !GetAtt kvsConsumerTrigger.Arn
         KinesisStreamArnForContactLens: !GetAtt ContactLensStream.Arn

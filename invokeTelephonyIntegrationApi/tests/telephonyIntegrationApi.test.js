@@ -7,9 +7,11 @@ const axiosWrapper = require('../axiosWrapper');
 // Mock the axiosWrapper methods
 const mockPost = jest.fn();
 const mockPatch = jest.fn();
+const mockGet = jest.fn();
 axiosWrapper.getScrtEndpoint = jest.fn(() => ({
   post: mockPost,
-  patch: mockPatch
+  patch: mockPatch,
+  get: mockGet
 }));
 
 jest.mock('../utils');
@@ -642,6 +644,633 @@ describe('telephonyIntegrationApi', () => {
         context: { payload: mockAxiosResponse }
       });
       expect(result).toEqual(expectedResponse);
+    });
+  });
+
+  describe('getVoicemailDrop', () => {
+    const contactId = 'test-contact-id';
+
+    it('should successfully get voicemail drop', async () => {
+      const expectedResponse = { recordingUrl: 'https://s3.amazonaws.com/voicemail-recordings/recording.wav' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.getVoicemailDrop(contactId, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockGet).toHaveBeenCalledWith(
+        `/voiceCalls/${contactId}/voicemailDrop`,
+        {
+          headers: {
+            ...buildAuthHeaders(),
+            'Telephony-Provider-Name': 'amazon-connect'
+          }
+        }
+      );
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should return recordingUrl "Not found" when backend returns 404', async () => {
+      const mock404Error = { response: { status: 404 } };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockRejectedValue(mock404Error);
+
+      const result = await api.getVoicemailDrop(contactId, mockConfigData);
+
+      expect(result).toEqual({ recordingUrl: 'Not found' });
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: `Voicemail drop not found for ${contactId}`,
+        context: { contactId }
+      });
+      expect(SCVLoggingUtil.error).not.toHaveBeenCalled();
+    });
+
+    it('should handle error when getting voicemail drop', async () => {
+      const mockError = new Error('API Error');
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockRejectedValue(mockError);
+
+      await expect(api.getVoicemailDrop(contactId, mockConfigData)).rejects.toThrow('Error getting voicemail drop');
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+        message: `Error getting voicemail drop for ${contactId}`,
+        context: { payload: mockError }
+      });
+    });
+
+    it('should throw when backend returns non-404 error status', async () => {
+      const mock500Error = { response: { status: 500 }, message: 'Internal Server Error' };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockRejectedValue(mock500Error);
+
+      await expect(api.getVoicemailDrop(contactId, mockConfigData)).rejects.toThrow('Error getting voicemail drop');
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+        message: `Error getting voicemail drop for ${contactId}`,
+        context: { payload: mock500Error }
+      });
+    });
+
+    it('should get voicemail drop and verify response data extraction', async () => {
+      const expectedResponse = {
+        recordingUrl: 'https://s3.amazonaws.com/voicemail-recordings/standard-greeting.wav'
+      };
+      const mockAxiosResponse = { data: expectedResponse, status: 200, headers: {} };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.getVoicemailDrop(contactId, mockConfigData);
+
+      expect(result).toEqual(expectedResponse);
+      expect(result).not.toHaveProperty('status');
+    });
+  });
+
+  describe('getDefaultOutboundPhoneNumber', () => {
+    const externalRepId = 'arn:aws:connect:us-east-1:123456789012:instance/xxx/agent/yyy';
+
+    it('should successfully get default outbound phone number with externalRepId query param', async () => {
+      const expectedResponse = { phoneNumber: '+15551234567' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.getDefaultOutboundPhoneNumber(externalRepId, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockGet).toHaveBeenCalledWith(
+        `/voiceCalls/defaultOutboundPhoneNumber?externalRepId=${encodeURIComponent(externalRepId)}`,
+        {
+          headers: {
+            ...buildAuthHeaders(),
+            'Telephony-Provider-Name': 'amazon-connect'
+          }
+        }
+      );
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: 'Successfully retrieved default outbound phone number',
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should handle error when getting default outbound phone number', async () => {
+      const mockError = new Error('API Error');
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockRejectedValue(mockError);
+
+      await expect(
+        api.getDefaultOutboundPhoneNumber(externalRepId, mockConfigData)
+      ).rejects.toThrow('Error getting default outbound phone number');
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+        message: 'Error getting default outbound phone number',
+        context: { payload: mockError }
+      });
+    });
+  });
+
+  describe('getVoicemailGreeting', () => {
+    const toPhoneNumber = '+15551234567';
+
+    it('should successfully get voicemail greeting with query param', async () => {
+      const expectedResponse = { greetingUrl: 'https://s3.example.com/greeting.wav' };
+      const mockAxiosResponse = { data: expectedResponse };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockResolvedValue(mockAxiosResponse);
+
+      const result = await api.getVoicemailGreeting(toPhoneNumber, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockGet).toHaveBeenCalledWith(
+        `/voiceCalls/voicemailGreeting?toPhoneNumber=${encodeURIComponent(toPhoneNumber)}`,
+        {
+          headers: {
+            ...buildAuthHeaders(),
+            'Telephony-Provider-Name': 'amazon-connect'
+          }
+        }
+      );
+      expect(SCVLoggingUtil.info).toHaveBeenCalledWith({
+        message: 'Successfully retrieved voicemail greeting',
+        context: { payload: mockAxiosResponse }
+      });
+      expect(result).toEqual(expectedResponse);
+    });
+
+    it('should encode toPhoneNumber in query string', async () => {
+      const numberWithSpecialChars = '+1 (555) 123-4567';
+      const mockAxiosResponse = { data: {} };
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockResolvedValue(mockAxiosResponse);
+
+      await api.getVoicemailGreeting(numberWithSpecialChars, mockConfigData);
+
+      expect(mockGet).toHaveBeenCalledWith(
+        `/voiceCalls/voicemailGreeting?toPhoneNumber=${encodeURIComponent(numberWithSpecialChars)}`,
+        expect.any(Object)
+      );
+    });
+
+    it('should handle error when getting voicemail greeting', async () => {
+      const mockError = new Error('API Error');
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      mockGet.mockRejectedValue(mockError);
+
+      await expect(
+        api.getVoicemailGreeting(toPhoneNumber, mockConfigData)
+      ).rejects.toThrow('Error getting voicemail greeting');
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith({
+        message: 'Error getting voicemail greeting',
+        context: { payload: mockError }
+      });
+    });
+  });
+
+  describe('reserveRoutableNumber', () => {
+    const baseParameters = {
+      countryCode: 'US',
+      fromNumber: '+11800999932',
+      toNumber: '+15551234567',
+      callId: '0LQLT000001jmnt',
+      transactionId: 'tx-123',
+    };
+
+    beforeEach(() => {
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      utils.isValidE164.mockImplementation(
+        (n) => typeof n === 'string' && /^\+[1-9]\d{1,14}$/.test(n)
+      );
+    });
+
+    it('should validate, build payload, and return a shaped response', async () => {
+      mockPost.mockResolvedValue({
+        data: {
+          handle: { routableNumber: '+14155560999', uid: 'uid-1', expiresAt: '2026-06-09T18:21:28Z' },
+          mode: 'number',
+        },
+      });
+
+      const result = await api.reserveRoutableNumber(baseParameters, {}, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockPost).toHaveBeenCalledWith(
+        '/voiceCalls/reserveRoutableNumber',
+        {
+          countryCode: 'US',
+          fromNumber: '+11800999932',
+          context: {
+            scrt2Domain: 'https://test-scrt-endpoint.com',
+            toNumber: '+15551234567',
+            callId: '0LQLT000001jmnt',
+            transactionId: 'tx-123',
+          },
+        },
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(result).toEqual({
+        statusCode: 200,
+        routableNumber: '+14155560999',
+        uid: 'uid-1',
+        expiresAt: '2026-06-09T18:21:28Z',
+        mode: 'number',
+      });
+    });
+
+    it('should omit callId and transactionId from context when not provided in params or attributes', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'number' } });
+
+      await api.reserveRoutableNumber(
+        { countryCode: 'US', fromNumber: '+11800999932', toNumber: '+15551234567' },
+        {},
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context).toEqual({
+        scrt2Domain: 'https://test-scrt-endpoint.com',
+        toNumber: '+15551234567',
+      });
+    });
+
+    it('should fall back to attributes for countryCode, callId, transactionId', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'number' } });
+
+      await api.reserveRoutableNumber(
+        { fromNumber: '+11800999932', toNumber: '+15551234567' },
+        { countryCode: 'GB', callId: 'attr-call-id', transactionId: 'attr-tx-id' },
+        mockConfigData
+      );
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/voiceCalls/reserveRoutableNumber',
+        expect.objectContaining({
+          countryCode: 'GB',
+          context: expect.objectContaining({
+            callId: 'attr-call-id',
+            transactionId: 'attr-tx-id',
+          }),
+        }),
+        expect.anything()
+      );
+    });
+
+    it('should derive scrt2Domain.origin from configData.scrtEndpointBase even when it has a path', async () => {
+      const customConfig = {
+        ...mockConfigData,
+        scrtEndpointBase: 'https://my-org.salesforce-scrt.com/telephony/v1',
+      };
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'number' } });
+
+      await api.reserveRoutableNumber(baseParameters, {}, customConfig);
+
+      expect(mockPost).toHaveBeenCalledWith(
+        '/voiceCalls/reserveRoutableNumber',
+        expect.objectContaining({
+          context: expect.objectContaining({
+            scrt2Domain: 'https://my-org.salesforce-scrt.com',
+          }),
+        }),
+        expect.anything()
+      );
+    });
+
+    it('should throw when fromNumber is missing', async () => {
+      await expect(
+        api.reserveRoutableNumber(
+          { countryCode: 'US', toNumber: '+15551234567' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw when fromNumber is not in E.164 format', async () => {
+      await expect(
+        api.reserveRoutableNumber(
+          { countryCode: 'US', fromNumber: '1800999932', toNumber: '+15551234567' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw when toNumber is missing', async () => {
+      await expect(
+        api.reserveRoutableNumber(
+          { countryCode: 'US', fromNumber: '+11800999932' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing toNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw when toNumber is not in E.164 format', async () => {
+      await expect(
+        api.reserveRoutableNumber(
+          { countryCode: 'US', fromNumber: '+11800999932', toNumber: '5551234567' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing toNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw when countryCode is missing from both params and attributes', async () => {
+      await expect(
+        api.reserveRoutableNumber(
+          { fromNumber: '+11800999932', toNumber: '+15551234567' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow('countryCode is required for reserveRoutableNumber');
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw a tagged error and log details when POST fails', async () => {
+      const axiosError = new Error('API Error');
+      axiosError.response = {
+        status: 429,
+        headers: { 'retry-after': '30' },
+        data: { code: 'RATE_LIMITED' },
+      };
+      mockPost.mockRejectedValue(axiosError);
+
+      let caught;
+      try {
+        await api.reserveRoutableNumber(baseParameters, {}, mockConfigData);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeDefined();
+      expect(caught.message).toBe('Error reserving routable number');
+      expect(caught.status).toBe(429);
+      expect(caught.retryAfter).toBe('30');
+      expect(caught.responseData).toEqual({ code: 'RATE_LIMITED' });
+
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Error reserving routable number',
+          context: expect.objectContaining({
+            status: 429,
+            retryAfter: '30',
+            data: { code: 'RATE_LIMITED' },
+          }),
+        })
+      );
+    });
+
+    it('should propagate originalFromNumber from params to payload.context.originalFromNumber', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'number' } });
+
+      await api.reserveRoutableNumber(
+        { ...baseParameters, originalFromNumber: '+14155551111' },
+        {},
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context.originalFromNumber).toBe('+14155551111');
+    });
+
+    it('should fall back to attributes.originalFromNumber when absent from params', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'number' } });
+
+      await api.reserveRoutableNumber(
+        { countryCode: 'US', fromNumber: '+11800999932', toNumber: '+15551234567' },
+        { originalFromNumber: '+14155552222' },
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context.originalFromNumber).toBe('+14155552222');
+    });
+
+    it('should omit originalFromNumber from context when not provided in params or attributes', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'number' } });
+
+      await api.reserveRoutableNumber(
+        { countryCode: 'US', fromNumber: '+11800999932', toNumber: '+15551234567' },
+        {},
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context).not.toHaveProperty('originalFromNumber');
+    });
+
+    it('should throw when originalFromNumber is present but not E.164, before any POST', async () => {
+      await expect(
+        api.reserveRoutableNumber(
+          { ...baseParameters, originalFromNumber: '4155551111' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid originalFromNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('createVoiceCallContext', () => {
+    const baseParameters = {
+      fromNumber: '+14155551111',
+      toNumber: '+15551234567',
+      callId: '0LQxx0000004ABcGAM',
+    };
+
+    beforeEach(() => {
+      utils.generateJWT.mockResolvedValue('test-jwt-token');
+      utils.isValidE164.mockImplementation(
+        (n) => typeof n === 'string' && /^\+[1-9]\d{1,14}$/.test(n)
+      );
+    });
+
+    it('should validate, build the minimal payload, and return a shaped response', async () => {
+      mockPost.mockResolvedValue({
+        data: {
+          status: 'success',
+          mode: 'correlationID',
+          handle: {
+            correlationId: 'a3f2c4d8-9b7e-4c6f-8e1d-2f5a9c3b7e4d',
+            expiresAt: '2026-07-15T18:45:11Z',
+          },
+        },
+      });
+
+      const result = await api.createVoiceCallContext(baseParameters, {}, mockConfigData);
+
+      verifyGenerateJWT();
+      expect(mockPost).toHaveBeenCalledWith(
+        '/voiceCalls/createVoiceCallContext',
+        {
+          fromNumber: '+14155551111',
+          context: {
+            scrt2Domain: 'https://test-scrt-endpoint.com',
+            toNumber: '+15551234567',
+            callId: '0LQxx0000004ABcGAM',
+          },
+        },
+        { headers: { ...buildAuthHeaders(), 'Telephony-Provider-Name': 'amazon-connect' } }
+      );
+      expect(result).toEqual({
+        statusCode: 200,
+        correlationId: 'a3f2c4d8-9b7e-4c6f-8e1d-2f5a9c3b7e4d',
+        expiresAt: '2026-07-15T18:45:11Z',
+        mode: 'correlationID',
+      });
+    });
+
+    it('should fall back to attributes for callId and transactionId when absent from params', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'correlationID' } });
+
+      await api.createVoiceCallContext(
+        { fromNumber: '+14155551111', toNumber: '+15551234567' },
+        { callId: 'attr-call-id', transactionId: 'attr-tx-id' },
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context.callId).toBe('attr-call-id');
+      expect(sentPayload.context.transactionId).toBe('attr-tx-id');
+    });
+
+    it('should include transactionId in context when provided in params', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'correlationID' } });
+
+      await api.createVoiceCallContext(
+        { ...baseParameters, transactionId: 'tx-123' },
+        {},
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context.transactionId).toBe('tx-123');
+    });
+
+    it('should omit transactionId from context when not provided in params or attributes', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'correlationID' } });
+
+      await api.createVoiceCallContext(baseParameters, {}, mockConfigData);
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context).not.toHaveProperty('transactionId');
+    });
+
+    it('should derive scrt2Domain origin from configData.scrtEndpointBase even when it has a path', async () => {
+      const customConfig = {
+        ...mockConfigData,
+        scrtEndpointBase: 'https://my-org.salesforce-scrt.com/telephony/v1',
+      };
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'correlationID' } });
+
+      await api.createVoiceCallContext(baseParameters, {}, customConfig);
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context.scrt2Domain).toBe('https://my-org.salesforce-scrt.com');
+    });
+
+    it('should throw when fromNumber is missing', async () => {
+      await expect(
+        api.createVoiceCallContext(
+          { toNumber: '+15551234567', callId: '0LQxx0000004ABcGAM' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw when fromNumber is not E.164', async () => {
+      await expect(
+        api.createVoiceCallContext(
+          { fromNumber: '4155551111', toNumber: '+15551234567', callId: '0LQxx0000004ABcGAM' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing fromNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should throw when toNumber is not E.164', async () => {
+      await expect(
+        api.createVoiceCallContext(
+          { fromNumber: '+14155551111', toNumber: '5551234567', callId: '0LQxx0000004ABcGAM' },
+          {},
+          mockConfigData
+        )
+      ).rejects.toThrow(/Invalid or missing toNumber/);
+      expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    it('should omit callId from context when missing from both params and attributes', async () => {
+      mockPost.mockResolvedValue({ data: { handle: {}, mode: 'correlationID' } });
+
+      await api.createVoiceCallContext(
+        { fromNumber: '+14155551111', toNumber: '+15551234567' },
+        {},
+        mockConfigData
+      );
+
+      const sentPayload = mockPost.mock.calls[0][1];
+      expect(sentPayload.context).toEqual({
+        scrt2Domain: 'https://test-scrt-endpoint.com',
+        toNumber: '+15551234567',
+      });
+    });
+
+    it('should throw a tagged error and log status + retry-after when POST returns 429', async () => {
+      const axiosError = new Error('API Error');
+      axiosError.response = {
+        status: 429,
+        headers: { 'retry-after': '30' },
+        data: { code: 'RATE_LIMITED' },
+      };
+      mockPost.mockRejectedValue(axiosError);
+
+      let caught;
+      try {
+        await api.createVoiceCallContext(baseParameters, {}, mockConfigData);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught).toBeDefined();
+      expect(caught.message).toBe('Error creating voice call context');
+      expect(caught.status).toBe(429);
+      expect(caught.retryAfter).toBe('30');
+      expect(caught.responseData).toEqual({ code: 'RATE_LIMITED' });
+      expect(SCVLoggingUtil.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Error creating voice call context',
+          context: expect.objectContaining({
+            status: 429,
+            retryAfter: '30',
+            data: { code: 'RATE_LIMITED' },
+          }),
+        })
+      );
+    });
+
+    it('should tag error with status 403 when POST returns 403', async () => {
+      const axiosError = new Error('Forbidden');
+      axiosError.response = { status: 403, headers: {}, data: { code: 'PERM_MISSING' } };
+      mockPost.mockRejectedValue(axiosError);
+
+      let caught;
+      try {
+        await api.createVoiceCallContext(baseParameters, {}, mockConfigData);
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(caught.status).toBe(403);
+      expect(caught.responseData).toEqual({ code: 'PERM_MISSING' });
     });
   });
 

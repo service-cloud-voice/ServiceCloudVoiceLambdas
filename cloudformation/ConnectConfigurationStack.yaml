@@ -33,9 +33,6 @@ Parameters:
   InvokeTelephonyApiLambdaArn:
     Type: String
     Description: Invoke Telephony API Lambda Arn
-  InvokeVfsApiLambdaArn:
-    Type: String
-    Description: Invoke VFS API Lambda Arn
   ContactLensConsumerLambdaArn:
     Type: String
     Description: ContactLensConsumer Lambda Arn
@@ -200,13 +197,6 @@ Resources:
     Properties:
       InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
       IntegrationArn: !Sub "${InvokeTelephonyApiLambdaArn}:active"
-      IntegrationType: "LAMBDA_FUNCTION"
-  InvokeVfsLambdaAssociationResource:
-    Type: AWS::Connect::IntegrationAssociation
-    DependsOn: InvokeTelephonyLambdaAssociationResource
-    Properties:
-      InstanceId: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
-      IntegrationArn: !Sub "${InvokeVfsApiLambdaArn}:active"
       IntegrationType: "LAMBDA_FUNCTION"
   KvsConsumerTriggerAssociationResource:
     Type: AWS::Connect::IntegrationAssociation

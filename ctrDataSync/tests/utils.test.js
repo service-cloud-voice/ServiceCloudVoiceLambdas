@@ -309,6 +309,15 @@ describe('transformCTR', () => {
             expect(resultNoLocation.fields.recordingLocation).toBeUndefined();
         });
     });
+
+    it('should set acceptTime to empty string when ConnectedToAgentTimestamp is null', () => {
+        const result = utils.transformCTR({
+            ContactId: "null-accept-time-test",
+            DisconnectReason: "AGENT_HUNGUP",
+            Agent: { ConnectedToAgentTimestamp: null }
+        });
+        expect(result.fields.acceptTime).toBe("");
+    });
 });
 
 describe('getCallAttributes', () => {
