@@ -98,33 +98,52 @@ describe("createRecord", () => {
 });
 
 describe("updateRecord", () => {
-  it("updates a record sucessfully using the api", async () => {
-    const data = "";
-    const configs = {
-      callCenterApiName: "callCenterApiNameVal",
-      baseURL: "baseURLVal",
-      authEndpoint: "authEndpointVal",
-      consumerKey: "consumerKeyVal",
-      privateKey: "privateKeyVal",
-      audience: "audienceVal",
-      subject: "subjectVal"
-    };
+  const configs = {
+    callCenterApiName: "callCenterApiNameVal",
+    baseURL: "baseURLVal",
+    authEndpoint: "authEndpointVal",
+    consumerKey: "consumerKeyVal",
+    privateKey: "privateKeyVal",
+    audience: "audienceVal",
+    subject: "subjectVal"
+  };
 
+  const successResponse = { success: true };
+
+  it("updates a record successfully when response data is empty string (204 No Content)", async () => {
     secretUtils.getSecretConfigs.mockImplementationOnce(() => Promise.resolve(configs));
-    utils.getAccessToken.mockImplementationOnce(() =>
-      Promise.resolve("test1234")
-    );
+    utils.getAccessToken.mockImplementationOnce(() => Promise.resolve("test1234"));
     axiosWrapper.apiEndpoint.mockImplementationOnce(() =>
       Promise.resolve({ data: "" })
     );
 
-    const responseData = {
-      success: true,
-    };
+    await expect(
+      await api.updateRecord("Account", "1234", { Name: "Test Account 1" })
+    ).toEqual(successResponse);
+  });
+
+  it("updates a record successfully when response data is null (204 No Content)", async () => {
+    secretUtils.getSecretConfigs.mockImplementationOnce(() => Promise.resolve(configs));
+    utils.getAccessToken.mockImplementationOnce(() => Promise.resolve("test1234"));
+    axiosWrapper.apiEndpoint.mockImplementationOnce(() =>
+      Promise.resolve({ data: null })
+    );
 
     await expect(
-      await api.updateRecord(("Account", "1234", { Name: "Test Account 1" }))
-    ).toEqual(responseData);
+      await api.updateRecord("Account", "1234", { Name: "Test Account 1" })
+    ).toEqual(successResponse);
+  });
+
+  it("updates a record successfully when response data is undefined (204 No Content)", async () => {
+    secretUtils.getSecretConfigs.mockImplementationOnce(() => Promise.resolve(configs));
+    utils.getAccessToken.mockImplementationOnce(() => Promise.resolve("test1234"));
+    axiosWrapper.apiEndpoint.mockImplementationOnce(() =>
+      Promise.resolve({ data: undefined })
+    );
+
+    await expect(
+      await api.updateRecord("Account", "1234", { Name: "Test Account 1" })
+    ).toEqual(successResponse);
   });
 
   it("updates a record on an erroneous object using the api", async () => {
@@ -141,23 +160,10 @@ describe("updateRecord", () => {
         ],
       },
     };
-    const configs = {
-      callCenterApiName: "callCenterApiNameVal",
-      baseURL: "baseURLVal",
-      authEndpoint: "authEndpointVal",
-      consumerKey: "consumerKeyVal",
-      privateKey: "privateKeyVal",
-      audience: "audienceVal",
-      subject: "subjectVal"
-    };
 
     secretUtils.getSecretConfigs.mockImplementationOnce(() => Promise.resolve(configs));
-    utils.getAccessToken.mockImplementationOnce(() =>
-      Promise.resolve("test1234")
-    );
-    axiosWrapper.apiEndpoint.mockImplementationOnce(() =>
-      Promise.reject(error)
-    );
+    utils.getAccessToken.mockImplementationOnce(() => Promise.resolve("test1234"));
+    axiosWrapper.apiEndpoint.mockImplementationOnce(() => Promise.reject(error));
 
     const errorResponse = {
       success: false,
