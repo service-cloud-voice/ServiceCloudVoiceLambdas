@@ -175,6 +175,27 @@ Resources:
       RoleName: !Sub "${lambdaPrefix}-InvokeSalesforceRestApiFunctionRole"
       Description: Invokes Salesforce REST API
 
+  MultiorgJwtTokenRotatorFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+        - !Sub "arn:aws:iam::${AWS::AccountId}:policy/scv/SCVSecretsManagerAccessPolicy"
+        - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/SCVSalesforceJwtKMSAccessPolicy"
+      RoleName: !Sub "${lambdaPrefix}-JwtTokenRotatorFunctionRole"
+      Description: Reads and rotates the AFV JWT stored in a call center's Salesforce secret
+
   MultiorgKvsTranscriberRoleResource:
     Type: AWS::IAM::Role
     Properties:
@@ -540,6 +561,17 @@ Resources:
       Description: InvokeSalesforceRestApiFunction node modules
       LayerName: !Sub '${lambdaPrefix}-MultiorgInvokeSalesforceRestApiFunctionLayer'
 
+  MultiorgJwtTokenRotatorFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs22.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/jwtTokenRotatorFunctionLayer${Version}'
+      Description: MultiorgJwtTokenRotatorFunction node modules
+      LayerName: !Sub '${lambdaPrefix}-MultiorgJwtTokenRotatorFunctionLayer'
+
   MultiorgCTRDataSyncFunctionLayer:
     Type: 'AWS::Lambda::LayerVersion'
     Properties:
@@ -762,6 +794,26 @@ Resources:
       Layers:
         - !Ref MultiorgInvokeSalesforceRestApiFunctionLayer
       Description: Invokes Salesforce REST API from contact flows
+
+  MultiorgJwtTokenRotatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub '${lambdaPrefix}-MultiorgJwtTokenRotatorFunction'
+      Role: !GetAtt MultiorgJwtTokenRotatorFunctionRoleResource.Arn
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/jwtTokenRotator${Version}"
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Timeout: 8
+      Runtime: nodejs22.x
+      Layers:
+        - !Ref MultiorgJwtTokenRotatorFunctionLayer
+      Description: Shared, pooled Lambda that mints a fresh RS256 JWT and rotates it into the secret named in the EventBridge invocation payload, so it can serve every call center's schedule without a per-org deployment.
 
   MultiorgCTRDataSyncFunction:
     Type: AWS::Serverless::Function
@@ -1121,6 +1173,10 @@ Outputs:
   MultiorgInvokeSalesforceRestApiFunctionArn:
     Description: ARN of the MultiorgInvokeSalesforceRestApi Lambda function
     Value: !GetAtt MultiorgInvokeSalesforceRestApiFunction.Arn
+
+  MultiorgJwtTokenRotatorFunctionArn:
+    Description: ARN of the MultiorgJwtTokenRotator Lambda function
+    Value: !Ref MultiorgJwtTokenRotatorFunction.Alias
 
   MultiorgVoiceMailAudioProcessingFunctionArn:
     Description: ARN of the VoiceMailAudioProcessing Lambda function

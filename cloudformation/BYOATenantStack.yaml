@@ -167,6 +167,30 @@ Resources:
         - Outputs.SecretsManagerManagedPolicyResource
       RoleName: "SCVInvokeTelephonyIntegrationApiFunctionRole"
       Description: InvokeTelephonyIntegrationApiFunction Lambda function assumes this role to create Service cloud voice calls to invoke CreateVoiceCall API explained here https://developer.salesforce.com/docs/atlas.en-us.voice_developer_guide.meta/voice_developer_guide/voice_rest_voicecalls_create.htm
+  SCVJwtTokenRotatorFunctionRoleResource:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary:
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action:
+          - sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.SecretsManagerManagedPolicyResource
+      - !GetAtt
+        - SCVManagedPolicyStack
+        - Outputs.SalesforceJwtKMSManagedPolicyResource
+      RoleName: "SCVJwtTokenRotatorFunctionRole"
+      Description: JwtTokenRotatorFunction Lambda function assumes this role to read and rotate the AFV JWT token stored in the contact center's Salesforce secret.
   SCVInvokeSalesforceRestApiFunctionRoleResource:
     Type: AWS::IAM::Role
     Properties:
@@ -238,6 +262,9 @@ Resources:
         - !GetAtt
           - SCVManagedPolicyStack
           - Outputs.KMSManagedPolicyResource
+        - !GetAtt
+          - SCVManagedPolicyStack
+          - Outputs.SalesforceJwtKMSManagedPolicyResource
       RoleName: "SCVSecretConfiguratorLambdaRole"
       Description: Lambda function assumes this role to access Salesforce secrets in AWS Secrets Manager and SSM parameters.
   SCVUpdateCredentialRoleResource:
@@ -863,6 +890,9 @@ Outputs:
   SCVInvokeTelephonyIntegrationApiFunctionRoleResource:
     Description: Implicit IAM Role created for InvokeTelephonyIntegrationApiFunction
     Value: !GetAtt SCVInvokeTelephonyIntegrationApiFunctionRoleResource.Arn
+  SCVJwtTokenRotatorFunctionRoleResource:
+    Description: Implicit IAM Role created for JwtTokenRotatorFunction
+    Value: !GetAtt SCVJwtTokenRotatorFunctionRoleResource.Arn
   SCVPostCallAnalysisTriggerFunctionRoleResource:
     Description: Implicit IAM Role created for PostCallAnalysisTriggerFunction
     Value: !GetAtt SCVPostCallAnalysisTriggerFunctionRoleResource.Arn

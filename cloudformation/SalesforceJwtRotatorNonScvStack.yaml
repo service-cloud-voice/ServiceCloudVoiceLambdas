@@ -1,0 +1,667 @@
+# Standalone stack for non-SCV (Open CTI / self-service) Amazon Connect customers to provision the
+# Salesforce JWT rotator end to end: two dedicated Secrets Manager secrets (a config secret with org id,
+# identity, and private key; and a plain-text secret holding only the rotated JWT), the
+# jwtTokenRotator Lambda + layer (same S3-hosted artifact as the SCV path, zero code changes), the
+# IAM roles it needs, and the EventBridge rotation schedule.
+#
+# The config secret is created with a placeholder private-key value - the customer must replace it
+# with the real PEM-encoded RSA private key in Secrets Manager after deploy, since a private key can
+# exceed CloudFormation's parameter character limit. Edit the field named
+# "<identity>-scrt-jwt-auth-private-key" inside the secret named in the SecretName output. The
+# rotated JWT lives in the separate secret named in the JwtSecretName output.
+#
+# Deleting this stack deletes BOTH secrets for real, including any real private key the
+# customer has since set in the config secret - back it up first if it needs to survive teardown.
+Description: >
+  Standalone stack for non-SCV Amazon Connect customers to provision the AFV JWT rotator
+  (config secret, dedicated JWT secret, Lambda, layer, IAM, schedule) in a single deploy.
+
+Parameters:
+  ConnectInstanceId:
+    Type: String
+    Description: Amazon Connect instance ID used to scope access to the AFV JWT token secret.
+
+  SalesforceOrgId:
+    Type: String
+    Description: The ID of the customer's Salesforce org. Written into the secret as SALESFORCE_ORG_ID and used as the JWT "iss" claim.
+
+  CallCenterApiName:
+    Type: String
+    Description: Fallback identity used as the JWT "sub" claim and to namespace the secret/roles when MessagingChannelApiName is not provided.
+
+  MessagingChannelApiName:
+    Type: String
+    Default: ''
+    Description: Optional. The customer's Messaging Channel API name. When provided, this is used instead of CallCenterApiName as the identity (JWT "sub" claim, secret name, private-key field name).
+
+  S3BucketForScvResources:
+    Type: String
+    Default: prod-byoa-scv-resources
+    Description: Base name of the Salesforce-hosted S3 bucket that stores the jwtTokenRotator Lambda/layer artifacts (region suffix is appended automatically).
+
+  SalesforceRelease:
+    Type: String
+    Default: 264.0
+    Description: Salesforce release identifier used as the S3 key prefix for the Lambda/layer artifacts.
+
+  Version:
+    Type: String
+    Default: V22.1
+    Description: Lambda/layer artifact version suffix.
+
+  PermissionBoundaryARN:
+    Type: String
+    Default: ''
+    Description: Optional IAM permission boundary ARN to attach to the roles this stack creates, as defined by the customer's account admin.
+
+Conditions:
+  HasMessagingChannel: !Not [!Equals [!Ref MessagingChannelApiName, '']]
+  HasPermissionBoundary: !Not [!Equals [!Ref PermissionBoundaryARN, '']]
+
+Transform: "AWS::Serverless-2016-10-31"
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  SalesforceJwtKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !If
+        - HasMessagingChannel
+        - !Sub "Customer managed key for ${MessagingChannelApiName}-salesforce-jwt-secret"
+        - !Sub "Customer managed key for ${CallCenterApiName}-salesforce-jwt-secret"
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableAccountAdministration
+            Effect: Allow
+            Principal:
+              AWS: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:root"
+            Action: kms:*
+            Resource: '*'
+          - Sid: AllowAmazonConnectToDecryptJwtSecret
+            Effect: Allow
+            Principal:
+              Service: connect.amazonaws.com
+            Action: kms:Decrypt
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+                kms:ViaService: !Sub "secretsmanager.${AWS::Region}.amazonaws.com"
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+              StringLike:
+                kms:EncryptionContext:SecretARN: !If
+                  - HasMessagingChannel
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${MessagingChannelApiName}-salesforce-jwt-secret-*"
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${CallCenterApiName}-salesforce-jwt-secret-*"
+          - Sid: AllowAmazonConnectToDescribeJwtKey
+            Effect: Allow
+            Principal:
+              Service: connect.amazonaws.com
+            Action: kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+      Tags:
+        - Key: resourceOwner
+          Value: scv
+
+  SalesforceJwtKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !If
+        - HasMessagingChannel
+        - !Sub "alias/${MessagingChannelApiName}SalesforceJwtKey"
+        - !Sub "alias/${CallCenterApiName}SalesforceJwtKey"
+      TargetKeyId: !Ref SalesforceJwtKey
+
+  # ---------------------------------------------------------------------
+  # Secret provisioning: a dedicated secret for this stack, created/merged
+  # by a custom resource (not a plain AWS::SecretsManager::Secret) so that a
+  # later stack Update never clobbers the token the rotator Lambda writes
+  # back into the same secret on every rotation.
+  # ---------------------------------------------------------------------
+
+  SecretConfiguratorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      PermissionsBoundary: !If [HasPermissionBoundary, !Ref PermissionBoundaryARN, !Ref 'AWS::NoValue']
+      Policies:
+        - PolicyName: AfvJwtSecretConfiguratorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:CreateSecret
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:UpdateSecret
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-salesforce-secret-*"
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-salesforce-jwt-secret-*"
+              - Effect: Allow
+                Action:
+                  - secretsmanager:DeleteSecret
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-salesforce-secret-*"
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-salesforce-jwt-secret-*"
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !GetAtt SalesforceJwtKey.Arn
+
+  # Custom-resource Lambda that creates-or-merges the dedicated secrets. This
+  # is a trimmed port of subaccount/cloudformation/SecretManagerStack.yaml's
+  # SCVSecretConfigurator: same create/update/merge flow (unlike
+  # SCVSecretConfigurator, both AfvJwtSecret and AfvJwtTokenSecret are
+  # deleted for real on stack teardown - see the Delete branches below), minus
+  # all the SSM Parameter Store logic (not needed here - the private-key
+  # field is seeded with a placeholder and is never read from a template
+  # parameter or SSM; the customer sets the real PEM value directly in
+  # Secrets Manager after deploy). PROTECTED_KEY_SUFFIXES below ensures a
+  # manually-entered key is never clobbered by a later stack Update. This
+  # single Lambda also manages the second, plain-text secret (see
+  # handle_plain_text_secret below and the AfvJwtTokenSecret resource) that
+  # the jwtTokenRotator Lambda writes the rotated JWT into - mirroring the
+  # IsPlainText/PlainTextValue branch added to SCVSecretConfigurator.
+  SecretConfigurator:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !If
+        - HasMessagingChannel
+        - !Sub "${MessagingChannelApiName}-AfvJwtSecretConfigurator"
+        - !Sub "${CallCenterApiName}-AfvJwtSecretConfigurator"
+      Runtime: python3.13
+      Handler: index.lambda_handler
+      Role: !GetAtt SecretConfiguratorRole.Arn
+      Timeout: 60
+      MemorySize: 128
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import logging
+          import cfnresponse
+          from botocore.exceptions import ClientError
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+
+          secrets_manager = boto3.client('secretsmanager')
+
+          # Suffixes (appended to the CallCenterApiName/MessagingChannelApiName
+          # identity) that are treated as protected: on Create, if the secret
+          # already exists, these keys fall back to the EXISTING value rather
+          # than the incoming template value, so a redeploy never silently
+          # swaps out key material. On Update, every overlapping key (below)
+          # is already preserved from the existing secret regardless of this
+          # list - it only changes Create-when-secret-preexists behavior.
+          PROTECTED_KEY_SUFFIXES = ['scrt-jwt-auth-private-key']
+
+          # CloudFormation property KEYS can't be computed (only values can),
+          # so the identity-prefixed private-key field name is passed as a
+          # NAME/VALUE pair of flat properties instead of directly as a
+          # SecretTemplate map key. This turns that pair into an actual dict
+          # entry. No SSM lookup involved (unlike SCVSecretConfigurator) -
+          # the value is a fixed placeholder string; the real PEM is set
+          # manually in Secrets Manager after deploy.
+          DYNAMIC_KEY_PROPERTIES = {
+              'PRIVATE_KEY_PARAM_NAME': 'PRIVATE_KEY_PARAM_VALUE',
+          }
+
+          def create_default_secret_template(properties):
+              excluded_properties = set(DYNAMIC_KEY_PROPERTIES.keys()) | set(DYNAMIC_KEY_PROPERTIES.values())
+
+              default_secret_template = {}
+              for param_name, param_value in DYNAMIC_KEY_PROPERTIES.items():
+                  if param_name in properties and param_value in properties:
+                      default_secret_template[properties[param_name]] = properties[param_value]
+
+              for prop_name, prop_value in properties.items():
+                  if prop_name not in excluded_properties:
+                      default_secret_template[prop_name] = prop_value
+
+              default_secret_string = json.dumps(default_secret_template, sort_keys=True)
+              logger.info(f"Generated default secret template with {len(default_secret_template)} keys")
+              return default_secret_template, default_secret_string
+
+          def merge_existing_secret_with_template(existing_secret_response, default_secret_template, request_type, identity):
+              protected_key_names = [f"{identity}-{suffix}" for suffix in PROTECTED_KEY_SUFFIXES] if identity else []
+
+              def is_protected_key(key):
+                  return key in protected_key_names
+
+              try:
+                  existing_secret_dict = json.loads(existing_secret_response['SecretString'])
+                  logger.info(f"Existing secret has {len(existing_secret_dict)} keys: {list(existing_secret_dict.keys())}")
+
+                  merged_secret_dict = default_secret_template.copy()
+
+                  existing_keys = set(existing_secret_dict.keys())
+                  template_keys = set(default_secret_template.keys())
+
+                  # Overlapping keys (present in both): on Update, always keep
+                  # the existing value (this is what lets the rotator's own
+                  # writes - and a preexisting private key - survive a stack
+                  # Update). On Create, protected keys fall back to the
+                  # existing value too; non-protected keys take the new
+                  # template value.
+                  overlapping_keys = existing_keys.intersection(template_keys)
+                  for key in overlapping_keys:
+                      if request_type == 'Update':
+                          merged_secret_dict[key] = existing_secret_dict[key]
+                      elif is_protected_key(key):
+                          merged_secret_dict[key] = existing_secret_dict[key]
+                      # else: Create + non-protected -> keep template value (already in merged_secret_dict)
+
+                  # Keys that only exist in the current secret (e.g. the
+                  # rotator-written scrt-jwt-auth-token field, which is never
+                  # part of this template) are always preserved.
+                  for key in existing_keys - template_keys:
+                      merged_secret_dict[key] = existing_secret_dict[key]
+
+                  merged_secret_string = json.dumps(merged_secret_dict, sort_keys=True)
+                  logger.info(f"Final merged secret has {len(merged_secret_dict)} keys")
+                  return merged_secret_dict, merged_secret_string
+
+              except (json.JSONDecodeError, KeyError) as e:
+                  logger.warning(f"Could not parse existing secret, using default template only: {e}")
+                  return default_secret_template, json.dumps(default_secret_template, sort_keys=True)
+
+          def kms_key_matches(actual_key_id, expected_key_arn):
+              if not actual_key_id:
+                  return False
+              return actual_key_id == expected_key_arn or expected_key_arn.endswith(f"/{actual_key_id}")
+
+          def handle_plain_text_secret(secret_name, plain_text_value, kms_key_arn):
+              """
+              Creates a plain text secret with a placeholder value if it doesn't exist yet.
+              Never touches an existing value on Create/Update: plain text secrets are
+              rotated at runtime by a separate Lambda (JwtTokenRotator) outside of
+              CloudFormation. Deletion (stack teardown) is handled separately in
+              lambda_handler, which actually removes the secret.
+              """
+              try:
+                  existing_secret = secrets_manager.get_secret_value(
+                      SecretId=secret_name, VersionStage='AWSCURRENT'
+                  )
+                  secret_metadata = secrets_manager.describe_secret(SecretId=secret_name)
+                  migrated = not kms_key_matches(secret_metadata.get('KmsKeyId'), kms_key_arn)
+                  if migrated:
+                      logger.info(f"Migrating plain text secret {secret_name} to its customer managed key")
+                      update_response = secrets_manager.update_secret(
+                          SecretId=secret_name,
+                          KmsKeyId=kms_key_arn,
+                          SecretString=existing_secret['SecretString']
+                      )
+                      existing_secret.update(update_response)
+                  else:
+                      logger.info(f"Plain text secret {secret_name} already uses its customer managed key")
+                  return {
+                      'SecretExists': True, 'SecretName': secret_name,
+                      'SecretArn': existing_secret.get('ARN', ''),
+                      'Updated': migrated, 'Created': False
+                  }
+              except secrets_manager.exceptions.ResourceNotFoundException:
+                  logger.info(f"Creating new plain text secret: {secret_name}")
+                  create_response = secrets_manager.create_secret(
+                      Name=secret_name,
+                      Description="AFV JWT rotator token secret (non-SCV, plain text)",
+                      SecretString=plain_text_value,
+                      KmsKeyId=kms_key_arn
+                  )
+                  return {
+                      'SecretExists': True, 'SecretName': secret_name,
+                      'SecretArn': create_response.get('ARN', ''),
+                      'Updated': False, 'Created': True
+                  }
+
+          def lambda_handler(event, context):
+              try:
+                  request_type = event.get('RequestType')
+                  resource_properties = event['ResourceProperties']
+                  secret_name = resource_properties['SecretName']
+
+                  if str(resource_properties.get('IsPlainText', 'false')).lower() == 'true':
+                      logger.info(f"Handling plain text secret request: {request_type}")
+                      if request_type == 'Delete':
+                          try:
+                              secrets_manager.delete_secret(SecretId=secret_name, ForceDeleteWithoutRecovery=True)
+                              logger.info(f"Deleted plain text secret {secret_name}")
+                          except secrets_manager.exceptions.ResourceNotFoundException:
+                              logger.info(f"Plain text secret {secret_name} already absent, nothing to delete")
+                          response_data = {'SecretExists': False, 'SecretName': secret_name, 'Updated': False, 'Created': False}
+                      else:
+                          response_data = handle_plain_text_secret(
+                              secret_name,
+                              resource_properties.get('PlainTextValue', ''),
+                              resource_properties['KmsKeyArn']
+                          )
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data, physicalResourceId=secret_name)
+                      return {'statusCode': 200, 'body': response_data}
+
+                  properties = resource_properties.get('SecretTemplate', {})
+                  identity = properties.get('CALL_CENTER_API_NAME')
+
+                  default_secret_template, default_secret_string = create_default_secret_template(properties)
+                  response_data = {}
+
+                  if request_type == 'Create':
+                      try:
+                          try:
+                              existing_secret = secrets_manager.get_secret_value(SecretId=secret_name, VersionStage='AWSCURRENT')
+                              logger.info(f"Secret {secret_name} already exists, merging with template")
+                              merged_secret_dict, merged_secret_string = merge_existing_secret_with_template(existing_secret, default_secret_template, request_type, identity)
+                              update_response = secrets_manager.update_secret(SecretId=secret_name, Description="AFV JWT rotator secret (non-SCV)", SecretString=merged_secret_string)
+                              response_data = {'SecretExists': True, 'SecretName': secret_name, 'SecretArn': update_response.get('ARN', ''), 'Updated': True, 'Created': False}
+                          except secrets_manager.exceptions.ResourceNotFoundException:
+                              logger.info(f"Creating new secret: {secret_name}")
+                              create_response = secrets_manager.create_secret(Name=secret_name, Description="AFV JWT rotator secret (non-SCV)", SecretString=default_secret_string)
+                              response_data = {'SecretExists': True, 'SecretName': secret_name, 'SecretArn': create_response.get('ARN', ''), 'Updated': False, 'Created': True}
+                      except ClientError as e:
+                          error_code = e.response['Error']['Code']
+                          logger.error(f"AWS error creating secret {secret_name}: {error_code} - {e}")
+                          response_data = {'SecretExists': False, 'SecretName': secret_name, 'SecretArn': '', 'Updated': False, 'Created': False, 'error': str(e)}
+
+                  elif request_type == 'Update':
+                      try:
+                          try:
+                              existing_secret = secrets_manager.get_secret_value(SecretId=secret_name, VersionStage='AWSCURRENT')
+                              merged_secret_dict, merged_secret_string = merge_existing_secret_with_template(existing_secret, default_secret_template, request_type, identity)
+                              update_response = secrets_manager.update_secret(SecretId=secret_name, Description="AFV JWT rotator secret (non-SCV)", SecretString=merged_secret_string)
+                              response_data = {'SecretExists': True, 'SecretName': secret_name, 'SecretArn': update_response.get('ARN', ''), 'Updated': True, 'Created': False}
+                          except secrets_manager.exceptions.ResourceNotFoundException:
+                              logger.error(f"Secret {secret_name} doesn't exist - cannot update")
+                              response_data = {'SecretExists': False, 'SecretName': secret_name, 'SecretArn': '', 'Updated': False, 'Created': False, 'error': 'Secret not found for update operation'}
+                      except ClientError as e:
+                          error_code = e.response['Error']['Code']
+                          logger.error(f"AWS error updating secret {secret_name}: {error_code} - {e}")
+                          response_data = {'SecretExists': False, 'SecretName': secret_name, 'SecretArn': '', 'Updated': False, 'Created': False, 'error': str(e)}
+
+                  elif request_type == 'Delete':
+                      # Unlike SCVSecretConfigurator (which always preserves this
+                      # secret), this stack deletes it for real on teardown so that
+                      # deleting the stack removes every resource it provisioned -
+                      # including any real private key the customer has since set.
+                      try:
+                          secrets_manager.delete_secret(SecretId=secret_name, ForceDeleteWithoutRecovery=True)
+                          logger.info(f"Deleted secret {secret_name}")
+                      except secrets_manager.exceptions.ResourceNotFoundException:
+                          logger.info(f"Secret {secret_name} already absent, nothing to delete")
+                      response_data = {'SecretExists': False, 'SecretName': secret_name, 'Updated': False, 'Created': False}
+
+                  else:
+                      logger.warning(f"Unsupported request type: {request_type}")
+                      response_data = {'SecretExists': False, 'SecretName': secret_name, 'Updated': False, 'Created': False}
+
+                  cfn_status = cfnresponse.FAILED if (request_type == 'Update' and not response_data.get('SecretExists', True)) else cfnresponse.SUCCESS
+                  cfnresponse.send(event, context, cfn_status, response_data, physicalResourceId=secret_name)
+                  return {'statusCode': 200 if cfn_status == cfnresponse.SUCCESS else 500, 'body': response_data}
+
+              except Exception as e:
+                  logger.error(f"Lambda execution failed: {e}")
+                  error_response = {'SecretExists': False, 'SecretName': event.get('ResourceProperties', {}).get('SecretName', ''), 'error': str(e)}
+                  cfnresponse.send(event, context, cfnresponse.FAILED, error_response, physicalResourceId=error_response['SecretName'])
+                  return {'statusCode': 500, 'body': error_response}
+
+  AfvJwtSecret:
+    Type: Custom::SecretManager
+    DependsOn: SecretConfigurator
+    Properties:
+      ServiceToken: !GetAtt SecretConfigurator.Arn
+      SecretName: !If
+        - HasMessagingChannel
+        - !Sub "${MessagingChannelApiName}-salesforce-secret"
+        - !Sub "${CallCenterApiName}-salesforce-secret"
+      # Included so a version/release bump alone forces the custom resource
+      # to re-run (merge logic still preserves the rotator-written token).
+      SalesforceRelease: !Ref SalesforceRelease
+      Version: !Ref Version
+      SecretTemplate:
+        CALL_CENTER_API_NAME: !If [HasMessagingChannel, !Ref MessagingChannelApiName, !Ref CallCenterApiName]
+        SALESFORCE_ORG_ID: !Ref SalesforceOrgId
+        # The identity prefix on the key name below is not a style choice -
+        # it is required by the unmodified jwtTokenRotator Lambda
+        # (lambdas/jwtTokenRotator/handler.js), which looks up the private
+        # key as `${CALL_CENTER_API_NAME}-scrt-jwt-auth-private-key` at
+        # runtime. Dropping the prefix would make every rotation fail with
+        # "Missing required secret fields for JWT generation".
+        #
+        # CloudFormation can only compute property VALUES, never property
+        # KEYS - so this computed key name can't be built directly as a
+        # SecretTemplate map key here. Instead, pass the computed name and
+        # the value as two flat properties and let the Python handler turn
+        # them into an actual dict entry (see PRIVATE_KEY_PARAM_NAME /
+        # PRIVATE_KEY_PARAM_VALUE handling in create_default_secret_template
+        # below - same indirection SCVSecretConfigurator uses).
+        #
+        # The value is a fixed placeholder, not a parameter: a PEM-encoded
+        # RSA private key can exceed CloudFormation's parameter value
+        # character limit. The customer must open the secret (named in the
+        # SecretName output) in Secrets Manager and replace this placeholder
+        # with the real private key after deploy. PROTECTED_KEY_SUFFIXES in
+        # the Lambda code above ensures that once the real key is set,
+        # subsequent stack Updates never overwrite it with this placeholder
+        # again.
+        PRIVATE_KEY_PARAM_NAME: !Sub
+          - "${Identity}-scrt-jwt-auth-private-key"
+          - Identity: !If [HasMessagingChannel, !Ref MessagingChannelApiName, !Ref CallCenterApiName]
+        PRIVATE_KEY_PARAM_VALUE: "REPLACE_WITH_PRIVATE_KEY"
+
+  # Dedicated secret holding only the rotated AFV JWT as plain text. The
+  # jwtTokenRotator Lambda still reads CALL_CENTER_API_NAME/SALESFORCE_ORG_ID/
+  # the private key from AfvJwtSecret above, and writes the rotated token
+  # here. CloudFormation only seeds a placeholder on first create and never
+  # touches the value again on subsequent updates (see
+  # handle_plain_text_secret in SecretConfigurator's code). Like AfvJwtSecret
+  # above, this secret is deleted for real when the stack is torn down.
+  AfvJwtTokenSecret:
+    Type: Custom::SecretManager
+    DependsOn: SecretConfigurator
+    Properties:
+      ServiceToken: !GetAtt SecretConfigurator.Arn
+      SecretName: !If
+        - HasMessagingChannel
+        - !Sub "${MessagingChannelApiName}-salesforce-jwt-secret"
+        - !Sub "${CallCenterApiName}-salesforce-jwt-secret"
+      SalesforceRelease: !Ref SalesforceRelease
+      Version: !Ref Version
+      IsPlainText: 'true'
+      PlainTextValue: 'PLACEHOLDER-AFV-JWT-TOKEN'
+      KmsKeyArn: !GetAtt SalesforceJwtKey.Arn
+
+  SalesforceJwtSecretResourcePolicy:
+    Type: AWS::SecretsManager::ResourcePolicy
+    DependsOn: AfvJwtTokenSecret
+    Properties:
+      BlockPublicPolicy: true
+      SecretId: !GetAtt AfvJwtTokenSecret.SecretArn
+      ResourcePolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAmazonConnectToReadJwtSecret
+            Effect: Allow
+            Principal:
+              Service: connect.amazonaws.com
+            Action: secretsmanager:GetSecretValue
+            Resource: !GetAtt AfvJwtTokenSecret.SecretArn
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnEquals:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:connect:${AWS::Region}:${AWS::AccountId}:instance/${ConnectInstanceId}"
+
+  # ---------------------------------------------------------------------
+  # jwtTokenRotator Lambda + layer - same S3-hosted artifact SCV uses, zero
+  # code changes. Only the surrounding role/secret/schedule differ.
+  # ---------------------------------------------------------------------
+
+  JwtTokenRotatorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      PermissionsBoundary: !If [HasPermissionBoundary, !Ref PermissionBoundaryARN, !Ref 'AWS::NoValue']
+      Policies:
+        - PolicyName: AfvJwtTokenRotatorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:UpdateSecret
+                  - secretsmanager:DescribeSecret
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-salesforce-secret-*"
+                  - !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*-salesforce-jwt-secret-*"
+              - Effect: Allow
+                Action:
+                  - kms:GenerateDataKey
+                  - kms:Encrypt
+                  - kms:Decrypt
+                  - kms:DescribeKey
+                Resource: !GetAtt SalesforceJwtKey.Arn
+
+  JwtTokenRotatorFunctionLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: JwtTokenRotatorFunctionLayer
+      CompatibleRuntimes:
+        - nodejs22.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/jwtTokenRotatorFunctionLayer${Version}'
+      Description: JwtTokenRotatorFunction node modules
+
+  JwtTokenRotatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !If
+        - HasMessagingChannel
+        - !Sub "${MessagingChannelApiName}-JwtTokenRotatorFunction"
+        - !Sub "${CallCenterApiName}-JwtTokenRotatorFunction"
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/jwtTokenRotator${Version}"
+      Handler: handler.handler
+      Runtime: nodejs22.x
+      Timeout: 8
+      AutoPublishAlias: active
+      VersionDescription: !Sub "AFV JWT Rotator (non-SCV) Lambda Version ${Version}"
+      Role: !GetAtt JwtTokenRotatorFunctionRole.Arn
+      Layers:
+        - !Ref JwtTokenRotatorFunctionLayer
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          SECRET_NAME: !If
+            - HasMessagingChannel
+            - !Sub "${MessagingChannelApiName}-salesforce-secret"
+            - !Sub "${CallCenterApiName}-salesforce-secret"
+          JWT_SECRET_NAME: !If
+            - HasMessagingChannel
+            - !Sub "${MessagingChannelApiName}-salesforce-jwt-secret"
+            - !Sub "${CallCenterApiName}-salesforce-jwt-secret"
+          INCLUDE_ROLES_CLAIM: "true"
+      Description: Scheduled Lambda that mints a fresh RS256 JWT from this stack's config secret and rotates it into the salesforce-jwt-secret every 55 minutes for the AFV WebSocket handshake with scrt2-websocket-relay.
+
+  # ---------------------------------------------------------------------
+  # Rotation schedule. Interval is hardcoded, not a parameter: it is
+  # coupled to lambdas/jwtTokenRotator/config.js's tokenValidFor (60m) -
+  # the token must always outlive the time until the next rotation, so the
+  # two values must only ever change together. Provisional pending
+  # security sign-off on max JWT validity vs. the Secrets Manager 100
+  # updates/day cap (55m rotation ~= 26 updates/day).
+  # ---------------------------------------------------------------------
+
+  JwtTokenRotatorScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Rotates the AFV JWT as plain text into this stack's dedicated salesforce-jwt-secret every 55 minutes (paired with the Lambda's 60m token validity)."
+      ScheduleExpression: "rate(55 minutes)"
+      State: "ENABLED"
+      Name: !If
+        - HasMessagingChannel
+        - !Sub "${MessagingChannelApiName}-JwtTokenRotatorScheduledRule"
+        - !Sub "${CallCenterApiName}-JwtTokenRotatorScheduledRule"
+      Targets:
+        - Arn: !Ref JwtTokenRotatorFunction.Alias
+          Id: "JwtTokenRotatorFunctionId"
+
+  JwtTokenRotatorScheduledRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref JwtTokenRotatorFunction.Alias
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt JwtTokenRotatorScheduledRule.Arn
+
+Outputs:
+  SecretName:
+    Description: Name of the config secret holding SALESFORCE_ORG_ID, CALL_CENTER_API_NAME, and the private key (edit the private-key placeholder here after deploy).
+    Value: !If
+      - HasMessagingChannel
+      - !Sub "${MessagingChannelApiName}-salesforce-secret"
+      - !Sub "${CallCenterApiName}-salesforce-secret"
+
+  SecretArn:
+    Description: ARN of the config secret holding SALESFORCE_ORG_ID, CALL_CENTER_API_NAME, and the private key.
+    Value: !GetAtt AfvJwtSecret.SecretArn
+
+  JwtSecretName:
+    Description: Name of the dedicated plain-text secret holding the rotated AFV JWT.
+    Value: !If
+      - HasMessagingChannel
+      - !Sub "${MessagingChannelApiName}-salesforce-jwt-secret"
+      - !Sub "${CallCenterApiName}-salesforce-jwt-secret"
+
+  JwtSecretArn:
+    Description: ARN of the dedicated plain-text secret holding the rotated AFV JWT.
+    Value: !GetAtt AfvJwtTokenSecret.SecretArn
+
+  SalesforceJwtKeyArn:
+    Description: ARN of the customer managed key for the Salesforce JWT token secret.
+    Value: !GetAtt SalesforceJwtKey.Arn
+
+  SalesforceJwtKeyAlias:
+    Description: Alias of the customer managed key for the Salesforce JWT token secret.
+    Value: !Ref SalesforceJwtKeyAlias
+
+  JwtTokenRotatorFunctionArn:
+    Description: ARN of the active alias of the JwtTokenRotator Lambda.
+    Value: !Ref JwtTokenRotatorFunction.Alias
+
+  JwtTokenRotatorScheduledRuleArn:
+    Description: ARN of the EventBridge rule that triggers rotation every 55 minutes.
+    Value: !GetAtt JwtTokenRotatorScheduledRule.Arn
+
+Metadata:
+  StageName: NonSCVSalesforceJwtRotatorProvision
+  Author: Salesforce Service Cloud
+  Description: Standalone, self-contained stack for non-SCV customers to provision the AFV JWT rotator (config secret, dedicated plain-text JWT secret, Lambda, layer, IAM, schedule) in a single deploy.
