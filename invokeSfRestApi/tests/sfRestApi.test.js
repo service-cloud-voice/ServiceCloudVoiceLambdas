@@ -173,6 +173,68 @@ describe("updateRecord", () => {
   });
 });
 
+describe("deleteRecord", () => {
+  const configs = {
+    callCenterApiName: "callCenterApiNameVal",
+    baseURL: "baseURLVal",
+    authEndpoint: "authEndpointVal",
+    consumerKey: "consumerKeyVal",
+    privateKey: "privateKeyVal",
+    audience: "audienceVal",
+    subject: "subjectVal"
+  };
+
+  it("deletes a record successfully using the api (204 No Content)", async () => {
+    secretUtils.getSecretConfigs.mockImplementationOnce(() => Promise.resolve(configs));
+    utils.getAccessToken.mockImplementationOnce(() => Promise.resolve("test1234"));
+    axiosWrapper.apiEndpoint.mockImplementationOnce(() =>
+      Promise.resolve({ data: "" })
+    );
+
+    await expect(
+      await api.deleteRecord("Account", "1234", "secretName", "accessTokenSecretName")
+    ).toEqual({ success: true });
+
+    expect(axiosWrapper.apiEndpoint).toHaveBeenCalledWith({
+      data: undefined,
+      baseURL: "baseURLVal",
+      headers: { Authorization: "Bearer test1234" },
+      method: "delete",
+      url: "/sobjects/Account/1234",
+    });
+  });
+
+  it("returns an error response when the record is not found", async () => {
+    const error = {
+      response: {
+        success: false,
+        status: 404,
+        statusText: "not found",
+        data: [
+          {
+            message: "The requested resource does not exist",
+            errorCode: "NOT_FOUND",
+          },
+        ],
+      },
+    };
+
+    secretUtils.getSecretConfigs.mockImplementationOnce(() => Promise.resolve(configs));
+    utils.getAccessToken.mockImplementationOnce(() => Promise.resolve("test1234"));
+    axiosWrapper.apiEndpoint.mockImplementationOnce(() => Promise.reject(error));
+
+    await expect(
+      await api.deleteRecord("Account", "nonexistent", "secretName", "accessTokenSecretName")
+    ).toEqual({
+      success: false,
+      status: 404,
+      statusText: "not found",
+      errorMessage: "The requested resource does not exist",
+      errorCode: "NOT_FOUND",
+    });
+  });
+});
+
 describe("queryRecord", () => {
   it("queries a record sucessfully using the api", async () => {
     const data = {
