@@ -129,6 +129,7 @@ Resources:
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-S3SecretCacheTTLRole"
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-StreamDiscoveryFunctionRole"
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-KvsTranscriberRole"
+              - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${LambdaPrefix}-JwtTokenRotatorFunctionRole"
               - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/scv/${LambdaPrefix}-LambdaS3AccessPolicy"
             Effect: Allow
           # Permission to read permission boundary policies attached to roles
@@ -182,6 +183,8 @@ Resources:
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-RealtimeAlert:*"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction"
               - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction:*"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgJwtTokenRotatorFunction"
+              - !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-MultiorgJwtTokenRotatorFunction:*"
             Effect: Allow
           - Action:
               - events:DescribeRule
@@ -189,6 +192,7 @@ Resources:
             Resource:
               - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/${LambdaPrefix}-*"
               - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/*VoiceMail*"
+              - !Sub "arn:${AWS::Partition}:events:*:${AWS::AccountId}:rule/*JwtTokenRotatorScheduledRule"
             Effect: Allow
           - Action:
               - cloudwatch:DescribeAlarms
@@ -277,6 +281,7 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*VoiceMailTranscribeRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*RealtimeAlertRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*HandleContactEventsRole"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*JwtTokenRotatorFunctionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/*HealthCheckLambdaExecutionRole"
                   - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVUpdateCredentialRole"
                   # Wildcard for all policies - covers SCV managed policies and permission boundaries
@@ -302,6 +307,8 @@ Resources:
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-kvsConsumerTrigger:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-kvsConsumerTrigger:*"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-AuthKeysSSMUtilFunction"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-AuthKeysSSMUtilFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-AuthKeysSSMUtilFunction:*"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-JwtTokenRotatorFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-JwtTokenRotatorFunction"]
+                  - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-JwtTokenRotatorFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-JwtTokenRotatorFunction:*"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-HandleContactEventsFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-HandleContactEventsFunction"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-HandleContactEventsFunction:*", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-HandleContactEventsFunction:*"]
                   - !If [HasLambdaPrefix, !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${LambdaPrefix}-ContactLensConsumerFunction", !Sub "arn:${AWS::Partition}:lambda:*:${AWS::AccountId}:function:${CallCenterApiName}-ContactLensConsumerFunction"]

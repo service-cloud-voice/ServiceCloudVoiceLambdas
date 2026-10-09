@@ -74,7 +74,7 @@ Resources:
                   - events:DescribeRule
                 Resource:
                   - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*ContactEventsRule"
-                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*ScheduledRule"
+                  - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/${ExistingCallCenterApiName}-ScheduledRule"
                   - !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:rule/*VoiceMail*"
               
               - Effect: Allow

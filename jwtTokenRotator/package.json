@@ -1,0 +1,25 @@
+{
+  "name": "jwttokenrotator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "handler.js",
+  "license": "BSD-3-Clause",
+  "dependencies": {
+    "aws-sdk": "2.1354.0",
+    "winston": "^3.8.0",
+    "jsonwebtoken": "9.0.3",
+    "uuid": "3.4.0"
+  },
+  "devDependencies": {
+    "jest": "30.3.0"
+  },
+  "scripts": {
+    "test": "jest --collect-coverage"
+  },
+  "jest": {
+    "clearMocks": true,
+    "modulePaths": [
+      "../layers/jwtTokenRotatorFunctionLayer/nodejs/node_modules/"
+    ]
+  }
+}

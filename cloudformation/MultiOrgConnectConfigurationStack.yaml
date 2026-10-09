@@ -5,10 +5,15 @@ Parameters:
     Type: String
     Description: Name of the Call Center API
 
+  lambdaPrefix:
+    Type: String
+    Default: scvMultiorg
+    Description: Prefix used by the shared Multiorg Lambda functions this stack targets
+
   ConnectInstanceId:
     Type: String
     Description: Amazon Connect Instance ID
-
+  
   SalesforceOrgId:
     Type: String
     Description: Salesforce Organization ID
@@ -28,7 +33,7 @@ Parameters:
   OrgDomainName:
     Type: String
     Description: Salesforce Org Domain Name
-
+  
   Scrt2MyDomainUrl:
     Type: String
     Description: SCRT2 MyDomain URL
@@ -73,7 +78,7 @@ Transform: "AWS::Serverless-2016-10-31"
 AWSTemplateFormatVersion: '2010-09-09'
 
 Conditions:
-  PermissionBoundaryIsNull:
+  PermissionBoundaryIsNull: 
     !Equals [!Ref PermissionBoundaryARN, '']
 
 Resources:
@@ -125,7 +130,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       PermissionsBoundary:
-        !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
+       !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
       AssumeRolePolicyDocument:
         Statement:
           - Action: "sts:AssumeRoleWithSAML"
@@ -160,12 +165,12 @@ Resources:
             Principal:
               AWS:
                 !Join
-                - ""
-                - - "arn:"
-                  - !Ref "AWS::Partition"
-                  - ":iam::"
-                  - !Ref MpaId
-                  - ":root"
+                  - ""
+                  - - "arn:"
+                    - !Ref "AWS::Partition"
+                    - ":iam::"
+                    - !Ref MpaId
+                    - ":root"
         Version: "2012-10-17"
       Policies:
         - PolicyDocument:
@@ -187,35 +192,35 @@ Resources:
         !If [PermissionBoundaryIsNull, !Ref "AWS::NoValue", !Ref PermissionBoundaryARN]
       AssumeRolePolicyDocument:
         Statement:
-          - Action: "sts:AssumeRole"
-            Effect: "Allow"
-            Principal:
-              AWS:
-                !Join
-                - ""
-                - - "arn:"
-                  - !Ref "AWS::Partition"
-                  - ":iam::"
-                  - !Ref MpaId
-                  - ":root"
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            AWS:
+              !Join
+              - ""
+              - - "arn:"
+                - !Ref "AWS::Partition"
+                - ":iam::"
+                - !Ref MpaId
+                - ":root"
         Version: "2012-10-17"
       Policies:
-        - PolicyDocument:
-            Statement:
-              - Action:
-                  - "kms:Decrypt"
-                Effect: "Allow"
-                Resource: '*'
-              - Action:
-                  - "s3:GetObject"
-                  - "s3:ListBucket"
-                Effect: "Allow"
-                Resource:
-                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/*'
-                  - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/*'
-                Sid: !Sub "${CallCenterApiName}SCVS3Sid"
-            Version: "2012-10-17"
-          PolicyName: !Sub "${CallCenterApiName}-SCVS3Policy"
+      - PolicyDocument:
+          Statement:
+          - Action:
+            - "kms:Decrypt"
+            Effect: "Allow"
+            Resource: '*'
+          - Action:
+            - "s3:GetObject"
+            - "s3:ListBucket"
+            Effect: "Allow"
+            Resource:
+            - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}-${AWS::AccountId}/*'
+            - !Sub 'arn:${AWS::Partition}:s3:::${S3BucketForTenantResources}replica-${AWS::AccountId}/*'
+            Sid: !Sub "${CallCenterApiName}SCVS3Sid"
+          Version: "2012-10-17"
+        PolicyName: !Sub "${CallCenterApiName}-SCVS3Policy"
       RoleName: !Sub "${CallCenterApiName}-SCVS3Role"
       MaxSessionDuration: 14400
 
@@ -225,6 +230,7 @@ Resources:
       TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/SecretManagerStack${Version}.yaml"
       Parameters:
         CallCenterApiName: !Ref CallCenterApiName
+        ConnectInstanceId: !Ref ConnectInstanceId
         SalesforceOrgId: !Ref SalesforceOrgId
         OrgDomainName: !Ref OrgDomainName
         Scrt2MyDomainUrl: !Ref Scrt2MyDomainUrl
@@ -238,14 +244,34 @@ Resources:
         SalesforceRelease: !Ref SalesforceRelease
         Version: !Ref Version
 
+  JwtTokenRotatorScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "Every 55 minutes, invokes the shared Multiorg JwtTokenRotator Lambda to mint and rotate this call center's AFV WebSocket JWT (RS256)"
+      ScheduleExpression: "rate(55 minutes)"
+      State: "ENABLED"
+      Name: !Sub "${CallCenterApiName}-JwtTokenRotatorScheduledRule"
+      Targets:
+        - Arn: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${lambdaPrefix}-MultiorgJwtTokenRotatorFunction:active"
+          Id: "JwtTokenRotatorFunctionId"
+          Input: !Sub '{"secretName": "${CallCenterApiName}-salesforce-secret", "jwtSecretName": "${CallCenterApiName}-salesforce-jwt-secret"}'
+
+  JwtTokenRotatorScheduledRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Sub "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${lambdaPrefix}-MultiorgJwtTokenRotatorFunction:active"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt JwtTokenRotatorScheduledRule.Arn
+
 Outputs:
   AuthKeysSSMUtilFunctionArn:
     Description: ARN of the AuthKeysSSMUtil Lambda function
-    Value: !GetAtt AuthKeysSSMUtilFunction.Arn
-
+    Value: !GetAtt AuthKeysSSMUtilFunction.Arn 
+  
   ConnectSSORoleResource:
     Description: Arn of the role used in the Connect SSO
-    Value: !GetAtt ConnectSSORoleResource.Arn
+    Value: !GetAtt ConnectSSORoleResource.Arn 
 
   ConnectCallRoleResource:
     Description: Arn of the role used in the Connect Call Suspend/Resume recording

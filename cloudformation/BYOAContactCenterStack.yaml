@@ -101,6 +101,9 @@ Outputs:
   InvokeTelephonyIntegrationApiFunction:
     Description: InvokeTelephonyIntegrationApi Lambda Function ARN
     Value: !GetAtt InvokeTelephonyIntegrationApiFunction.Arn
+  JwtTokenRotatorFunction:
+    Description: JwtTokenRotator Lambda Function ARN
+    Value: !GetAtt JwtTokenRotatorFunction.Arn
   kvsTranscriber:
     Description: kvsTranscriber Lambda Function ARN
     Value: !GetAtt kvsTranscriber.Arn
@@ -217,6 +220,16 @@ Resources:
         S3Key: !Sub '${SalesforceRelease}/invokeTelephonyIntegrationApiFunctionLayer${Version}'
       Description: InvokeTelephonyIntegrationApiFunction node modules
       LayerName: InvokeTelephonyIntegrationApiFunctionLayer
+  JwtTokenRotatorFunctionLayer:
+    Type: 'AWS::Lambda::LayerVersion'
+    Properties:
+      CompatibleRuntimes:
+        - nodejs22.x
+      Content:
+        S3Bucket: !Sub '${S3BucketForScvResources}-${AWS::Region}'
+        S3Key: !Sub '${SalesforceRelease}/jwtTokenRotatorFunctionLayer${Version}'
+      Description: JwtTokenRotatorFunction node modules
+      LayerName: JwtTokenRotatorFunctionLayer
   KVSConsumerTriggerFunctionLayer:
     Type: 'AWS::Lambda::LayerVersion'
     Properties:
@@ -355,6 +368,27 @@ Resources:
       Layers:
         - Ref: InvokeTelephonyIntegrationApiFunctionLayer
       Description: Creates VoiceCall records and handles OmniChannel routing
+  JwtTokenRotatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri:
+        Bucket: !Sub "${S3BucketForScvResources}-${AWS::Region}"
+        Key: !Sub "${SalesforceRelease}/jwtTokenRotator${Version}"
+      Environment:
+        Variables:
+          LOG_LEVEL: "info"
+          SECRET_NAME: !Sub "${CallCenterApiName}-salesforce-secret"
+          JWT_SECRET_NAME: !Sub "${CallCenterApiName}-salesforce-jwt-secret"
+      Handler: handler.handler
+      AutoPublishAlias: active
+      VersionDescription: !Sub "Service Cloud Voice Lambda Version ${Version}"
+      Role: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/SCVJwtTokenRotatorFunctionRole"
+      Timeout: 8
+      Runtime: nodejs22.x
+      FunctionName: !If [LambdaPrefixIsNull, !Sub "${CallCenterApiName}-JwtTokenRotatorFunction", !Sub "${LambdaPrefix}-JwtTokenRotatorFunction"]
+      Layers:
+        - Ref: JwtTokenRotatorFunctionLayer
+      Description: Mints and rotates the AFV WebSocket JWT (RS256)
   InvokeSalesforceRestApiFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -925,15 +959,17 @@ Resources:
 
   EventRulesStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: 
+    DependsOn:
       - HandleContactEventsFunction
       - InvokeTelephonyIntegrationApiFunction
+      - JwtTokenRotatorFunction
     DeletionPolicy: Delete
     Properties:
       TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/EventRulesStack${Version}.yaml"
       Parameters:
         HandleContactEventsFunctionAliasActive: !Ref HandleContactEventsFunction.Alias
         InvokeTelephonyIntegrationApiFunctionAliasActive: !Ref InvokeTelephonyIntegrationApiFunction.Alias
+        JwtTokenRotatorFunctionAliasActive: !Ref JwtTokenRotatorFunction.Alias
         CallCenterApiName: !Ref CallCenterApiName
 
 
@@ -1033,6 +1069,7 @@ Resources:
       TemplateURL: !Sub "https://${S3BucketForScvResources}-${AWS::Region}.s3.${AWS::Region}.amazonaws.com/${SalesforceRelease}/SecretManagerStack${Version}.yaml"
       Parameters:
         CallCenterApiName: !Ref CallCenterApiName
+        ConnectInstanceId: !Ref ConnectInstanceId
         SalesforceOrgId: !Ref SalesforceOrgId
         OrgDomainName: !Ref OrgDomainName
         Scrt2MyDomainUrl: !Ref Scrt2MyDomainUrl
