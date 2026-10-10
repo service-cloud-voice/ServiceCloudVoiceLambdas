@@ -95,14 +95,9 @@ async function updateRecord(objectApiName, recordId, fieldValues, secretName, ac
       message: "update Record response",
       context: response,
     });
-    if (response.data === "") {
-      return {
-        success: true,
-      };
-    }
-    return {
-      success: false,
-    };
+    // Salesforce returns 204 No Content on a successful PATCH.
+    // axios throws on non-2xx, so reaching here always means success.
+    return { success: true };
   } catch (e) {
     return buildError(e);
   }
