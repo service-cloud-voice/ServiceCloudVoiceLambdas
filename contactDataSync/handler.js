@@ -15,6 +15,7 @@ exports.handler = async function (event, context) {
     "operation": "uploadTranscript",
     "secretName": "callCenterApiName-salesforce-secret", // org. secret name is at the top payload level, and customer needs to make sure all the contactIds in this payload are for one org. for this corresponding org.'s secret
     "accessTokenSecretName": "callCenterApiName-salesforce-access-token-secret",
+    "useRedactedTranscript": true, // optional, defaults to USE_REDACTED_TRANSCRIPT env var (false). Uploads the Contact Lens redacted transcript instead of the original.
     "payload": [
       {
         "contactId": "8c6258f0-66fa-4137-a61f-68311bb6d300",
@@ -43,6 +44,7 @@ exports.handler = async function (event, context) {
   */
   const secretName = event.secretName || config.secretName;
   const accessTokenSecretName = event.accessTokenSecretName || config.accessTokenSecretName;
+  const useRedactedTranscript = event.useRedactedTranscript ?? config.useRedactedTranscript;
 
   switch (event.operation) {
     case "uploadTranscript": {
@@ -54,7 +56,8 @@ exports.handler = async function (event, context) {
           awsAccountId,
           event.payload,
           secretName,
-          accessTokenSecretName
+          accessTokenSecretName,
+          useRedactedTranscript
         );
       }
       return uploadResult;

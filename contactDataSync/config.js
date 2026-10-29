@@ -6,4 +6,5 @@ module.exports = {
   invokeSfRestApiArn: process.env.INVOKE_SALESFORCE_REST_API_ARN,
   batchSize: process.env.BATCH_SIZE,
   s3BucketTenantResources: process.env.S3_BUCKET_TENANT_RESOURCES,
+  useRedactedTranscript: process.env.USE_REDACTED_TRANSCRIPT === "true",
 };

@@ -10,6 +10,9 @@ jest.mock('aws-sdk', () => {
 });
 jest.mock('../SCVLoggingUtil');
 
+const s3 = aws.S3.mock.results[0].value;
+const listedObjects = (keys) => ({ promise: jest.fn().mockResolvedValue({ Contents: keys.map((Key) => ({ Key })) }) });
+
 describe('awsUtils', () => {
   it('getTranscript returns conversation entries', async () => {
     const clObject = { CustomerMetadata: { ContactId: 'cid', InstanceId: 'iid' }, Transcript: [{ Id: 'id', BeginOffsetMillis: 0, ParticipantId: 'CUSTOMER', Content: 'hi' }], };
@@ -21,6 +24,24 @@ describe('awsUtils', () => {
     const eventPayload = [{ contactId: 'cid' }];
     const result = await awsUtils.getContactLensS3Path('bucket', eventPayload, 'iid');
     expect(Array.isArray(result)).toBe(true);
+  });
+  it('getContactLensS3Path reads the original analysis files by default', async () => {
+    const original = 'Analysis/Voice/2026/10/29/cid_analysis_2026-10-29T00:22:43Z.json';
+    s3.listObjectsV2.mockReturnValueOnce(listedObjects([original]));
+    const result = await awsUtils.getContactLensS3Path('bucket', [{ contactId: 'cid' }], 'iid');
+    expect(s3.listObjectsV2.mock.calls[0][0].Prefix).toMatch(/^Analysis\/Voice\/\d{4}\/\d{2}\/\d{2}\/$/);
+    expect(result).toEqual([original]);
+  });
+  it('getContactLensS3Path reads the redacted analysis files and skips redacted recordings', async () => {
+    const redacted = 'Analysis/Voice/Redacted/2026/10/29/cid_analysis_redacted_2026-10-29T00:22:43Z.json';
+    s3.listObjectsV2.mockReturnValueOnce(listedObjects([
+      redacted,
+      'Analysis/Voice/Redacted/2026/10/29/cid_call_recording_redacted_2026-10-29T00:22:43Z.wav',
+      'Analysis/Voice/Redacted/2026/10/29/other_analysis_redacted_2026-10-29T00:22:43Z.json',
+    ]));
+    const result = await awsUtils.getContactLensS3Path('bucket', [{ contactId: 'cid' }], 'iid', true);
+    expect(s3.listObjectsV2.mock.calls[0][0].Prefix).toMatch(/^Analysis\/Voice\/Redacted\/\d{4}\/\d{2}\/\d{2}\/$/);
+    expect(result).toEqual([redacted]);
   });
   it('getS3Object returns S3 object', async () => {
     const params = { Bucket: 'bucket', Key: 'key' };
