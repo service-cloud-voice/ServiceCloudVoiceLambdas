@@ -7,6 +7,9 @@ Parameters:
   InvokeTelephonyIntegrationApiFunctionAliasActive:
     Type: String
     Description: InvokeTelephonyIntegrationApi lambda function alias active arn
+  JwtTokenRotatorFunctionAliasActive:
+    Type: String
+    Description: JwtTokenRotator lambda function alias active arn
   CallCenterApiName:
     Type: String
     Description: Salesforce CallCenter API name in lower case
@@ -56,6 +59,25 @@ Resources:
       Action: "lambda:InvokeFunction"
       Principal: "events.amazonaws.com"
       SourceArn: !GetAtt ScheduledRule.Arn
+
+  JwtTokenRotatorScheduledRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: "The event rule to rotate the AFV JWT into the contact center's secret every 55 minutes"
+      ScheduleExpression: "rate(55 minutes)"
+      State: "ENABLED"
+      Name: !Sub "${CallCenterApiName}-JwtTokenRotatorScheduledRule"
+      Targets:
+        - Arn: !Sub "${JwtTokenRotatorFunctionAliasActive}"
+          Id: "JwtTokenRotatorFunctionId"
+
+  JwtTokenRotatorScheduledRulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Sub "${JwtTokenRotatorFunctionAliasActive}"
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt JwtTokenRotatorScheduledRule.Arn
 
 Metadata:
   StageName : ServiceVoiceContactCenterProvision

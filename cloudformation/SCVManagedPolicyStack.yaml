@@ -106,6 +106,35 @@ Resources:
       Description: Policy to access Salesforce owned Keys
       ManagedPolicyName: !If [UseResellCondition, "KMSAccessPolicy", !Sub "SCVKMSAccessPolicy"]
       Path: /scv/
+  SalesforceJwtKMSManagedPolicyResource:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: UseSalesforceJwtKeys
+            Effect: Allow
+            Action:
+              - kms:GenerateDataKey
+              - kms:Encrypt
+              - kms:Decrypt
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/resourceOwner": "scv"
+              StringLike:
+                kms:ViaService: "secretsmanager.*.amazonaws.com"
+                "kms:EncryptionContext:SecretARN": !Sub "arn:${AWS::Partition}:secretsmanager:*:${AWS::AccountId}:secret:*-salesforce-jwt-secret-*"
+          - Sid: DescribeSalesforceJwtKeys
+            Effect: Allow
+            Action: kms:DescribeKey
+            Resource: "*"
+            Condition:
+              StringEquals:
+                "aws:ResourceTag/resourceOwner": "scv"
+      Description: Policy for configurator and rotator Lambdas to use Salesforce JWT customer managed keys
+      ManagedPolicyName: !If [UseResellCondition, "SalesforceJwtKMSAccessPolicy", "SCVSalesforceJwtKMSAccessPolicy"]
+      Path: /scv/
   KinesisDataStreamManagedPolicyResource:
     Type: AWS::IAM::ManagedPolicy
     Properties:
@@ -205,6 +234,7 @@ Resources:
               - connect:UpdateRoutingProfileQueues
               - connect:UpdateRoutingProfileName
               - connect:UpdateRoutingProfileDefaultOutboundQueue
+              - connect:UpdateRoutingProfileConcurrency
               - connect:UpdateContactRoutingData
               - connect:PutUserStatus
               - connect:UpdateQueueHoursOfOperation
@@ -246,6 +276,9 @@ Outputs:
   KMSManagedPolicyResource:
     Description: Policy to access Salesforce owned parameter store
     Value: !Ref KMSManagedPolicyResource
+  SalesforceJwtKMSManagedPolicyResource:
+    Description: Policy for configurator and rotator Lambdas to use Salesforce JWT customer managed keys
+    Value: !Ref SalesforceJwtKMSManagedPolicyResource
   KinesisDataStreamManagedPolicyResource:
     Description: Implicit IAM Role created for CTRDataSyncFunction
     Value: !Ref KinesisDataStreamManagedPolicyResource
