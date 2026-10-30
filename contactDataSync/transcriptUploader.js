@@ -21,7 +21,7 @@ async function fetchTranscriptFromCLFile(params, contactIdRelatedRecordMap) {
   return convTranscriptEntries;
 }
 
-async function processTranscript(awsAccountId, eventPayload, secretName, accessTokenSecretName) {
+async function processTranscript(awsAccountId, eventPayload, secretName, accessTokenSecretName, useRedactedTranscript = false) {
   const bucketName = config.s3BucketTenantResources;
   const transcriptResults = [];
 
@@ -33,7 +33,8 @@ async function processTranscript(awsAccountId, eventPayload, secretName, accessT
   const contactLensS3Path = await awsUtil.getContactLensS3Path(
     bucketName,
     eventPayload,
-    config.connectInstanceId
+    config.connectInstanceId,
+    useRedactedTranscript
   );
 
   SCVLoggingUtil.info({

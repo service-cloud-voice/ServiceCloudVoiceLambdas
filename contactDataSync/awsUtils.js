@@ -72,9 +72,13 @@ async function getTranscript(clObject, contactIdRelatedRecordMap) {
   @param bucketName - S3 Bucket name containing contact lens files
   @param contactIds - List of contact ids to get contact lens files from S3
   @param instanceId - Connect instanceId
+  @param useRedactedTranscript - Read the redacted Contact Lens files (Analysis/Voice/Redacted/) instead of the original ones
   @returns List of Contact Lens files
  */
-async function getContactLensS3Path(bucketName, eventPayload, instanceId) {
+async function getContactLensS3Path(bucketName, eventPayload, instanceId, useRedactedTranscript = false) {
+  const analysisPrefix = useRedactedTranscript
+    ? "Analysis/Voice/Redacted/"
+    : "Analysis/Voice/";
   let filePaths = [];
   const contactIds = eventPayload.map((x) => x.contactId);
   const contactLensFilePathPrefixDate = [];
@@ -117,11 +121,15 @@ async function getContactLensS3Path(bucketName, eventPayload, instanceId) {
 
       const s3Params = {
         Bucket: bucketName,
-        Prefix: "Analysis/Voice/" + prefixDate + "/",
+        Prefix: analysisPrefix + prefixDate + "/",
       };
       const s3Data = await s3.listObjectsV2(s3Params).promise();
+      // The Redacted prefix also holds the redacted call recordings (.wav); only the .json files are analysis files
+      const analysisFiles = s3Data.Contents.filter((s3file) =>
+        s3file.Key.endsWith(".json")
+      );
 
-      const filteredFiles = s3Data.Contents.filter((s3file) => {
+      const filteredFiles = analysisFiles.filter((s3file) => {
         return s3file.Key.includes(contactId);
       });
       if (filteredFiles.length === 0) {
@@ -132,7 +140,7 @@ async function getContactLensS3Path(bucketName, eventPayload, instanceId) {
       }
       const contactLensFilePaths = filteredFiles.map((file) => file.Key);
       // add key to contactLensS3Keys
-      s3Data.Contents.forEach((s3file) => {
+      analysisFiles.forEach((s3file) => {
         contactLensFilePathPrefixDate.push(s3file.Key);
       });
       filePaths = filePaths.concat(contactLensFilePaths);

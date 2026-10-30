@@ -41,6 +41,16 @@ describe("ContactDataSync Lambda handler", () => {
     expect(res).toBe('result');
   });
 
+  it('uploads original transcripts unless useRedactedTranscript is set', async () => {
+    const spy = jest.spyOn(transcriptUploader, 'processTranscript').mockResolvedValue('result');
+    const context = { invokedFunctionArn: 'arn:aws:lambda:region:acct:function:name' };
+    const payload = [{ contactId: 'cid', relatedRecords: ['rec'] }];
+    await handler.handler({ operation: 'uploadTranscript', payload }, context);
+    await handler.handler({ operation: 'uploadTranscript', payload, useRedactedTranscript: true }, context);
+    expect(spy.mock.calls[0][4]).toBe(false);
+    expect(spy.mock.calls[1][4]).toBe(true);
+  });
+
   it('handles fetchUploadIdsStatus operation', async () => {
     jest.spyOn(fetchUploadIdsStatus, 'processFetchUploadIdsStatus').mockResolvedValue('result');
     const event = { operation: 'fetchUploadIdsStatus', uploadIds: ['id'], secretName: 'secret', accessTokenSecretName: 'access' };

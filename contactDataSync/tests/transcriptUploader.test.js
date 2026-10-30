@@ -21,6 +21,11 @@ describe('transcriptUploader.processTranscript', () => {
     expect(sfRestApi.invokeSfRestApiUploadTranscript).toHaveBeenCalled();
     expect(result).toContain('sfResult');
   });
+  it('passes useRedactedTranscript to the Contact Lens file lookup', async () => {
+    const payload = [{ contactId: 'cid', relatedRecords: ['rec'] }];
+    await transcriptUploader.processTranscript('acct', payload, 'secret', 'access', true);
+    expect(awsUtils.getContactLensS3Path).toHaveBeenCalledWith('callCenter-12345678', payload, 'inst', true);
+  });
   it('handles empty transcript entries', async () => {
     awsUtils.getTranscript.mockResolvedValue([]);
     const payload = [{ contactId: 'cid', relatedRecords: ['rec'] }];

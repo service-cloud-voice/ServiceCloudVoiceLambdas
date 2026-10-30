@@ -8,6 +8,7 @@ describe('config', () => {
     process.env.INVOKE_SALESFORCE_REST_API_ARN = 'arn';
     process.env.BATCH_SIZE = '2';
     process.env.S3_BUCKET_TENANT_RESOURCES = 'callCenter-1234567890';
+    process.env.USE_REDACTED_TRANSCRIPT = 'true';
     jest.resetModules();
     const freshConfig = require('../config');
     expect(freshConfig.connectInstanceId).toBe('inst');
@@ -15,5 +16,6 @@ describe('config', () => {
     expect(freshConfig.invokeSfRestApiArn).toBe('arn');
     expect(freshConfig.batchSize).toBe('2');
     expect(freshConfig.s3BucketTenantResources).toBe('callCenter-1234567890');
+    expect(freshConfig.useRedactedTranscript).toBe(true);
   });
 });
