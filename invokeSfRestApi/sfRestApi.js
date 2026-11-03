@@ -108,6 +108,27 @@ async function updateRecord(objectApiName, recordId, fieldValues, secretName, ac
   }
 }
 
+async function deleteRecord(objectApiName, recordId, secretName, accessTokenSecretName) {
+  try {
+    await sendRequest(
+      secretName,
+      accessTokenSecretName,
+      "delete",
+      `/sobjects/${objectApiName}/${recordId}`,
+    );
+    SCVLoggingUtil.debug({
+      category: "sfRestApi.deleteRecord",
+      message: "delete Record response",
+      context: { objectApiName, recordId },
+    });
+    // Salesforce returns 204 No Content on a successful DELETE.
+    // axios throws on non-2xx, so reaching here always means success.
+    return { success: true };
+  } catch (e) {
+    return buildError(e);
+  }
+}
+
 async function sendRealtimeAlertEvent(fieldValues, secretName, accessTokenSecretName) {
   try {
     const response = await sendRequest(
@@ -246,6 +267,7 @@ async function searchRecord(sosl, secretName, accessTokenSecretName) {
 module.exports = {
   createRecord,
   updateRecord,
+  deleteRecord,
   queryRecord,
   searchRecord,
   sendRealtimeAlertEvent,
