@@ -37,19 +37,21 @@ async function sendRequest(secretName, accessTokenSecretName, method, url, data,
   const headers = headersVal || {};
   const configs = await secretUtils.getSecretConfigs(secretName);
   const baseURL = configs.baseURL;
+ 
+  const buildData = () => (typeof data === "function" ? data() : data);  // data can be a function that builds a fresh body for each attempt, for bodies that can only be sent once (e.g. FormData)
 
   try {
     accessToken = await utils.getAccessToken(configs, accessTokenSecretName);
     headers.Authorization = `Bearer ${accessToken}`;
 
-    return await axiosWrapper.apiEndpoint({ method, baseURL, url, data, headers });
+    return await axiosWrapper.apiEndpoint({ method, baseURL, url, data: buildData(), headers });
   } catch (e) {
     if (e.response && e.response.status === 401) {
       // Obtain a new access token since the cached one already expired.
       accessToken = await utils.getAccessToken(configs, accessTokenSecretName, true);
       headers.Authorization = `Bearer ${accessToken}`;
 
-      return await axiosWrapper.apiEndpoint({ method, baseURL, url, data, headers });
+      return await axiosWrapper.apiEndpoint({ method, baseURL, url, data: buildData(), headers });
     }
 
     throw e;
@@ -133,33 +135,36 @@ async function sendRealtimeAlertEvent(fieldValues, secretName, accessTokenSecret
 
 async function uploadTranscript(contactIdsPayloadMap, secretName, accessTokenSecretName) {
   try {
-    const formData = new FormData();
-    const headers = Object.assign(
-      {
-        Accept: "application/json",
-      },
-      formData.getHeaders()
-    );
-    //filename required for multipart upload
-    //https://developer.salesforce.com/docs/atlas.en-us.248.0.voice_developer_guide.meta/voice_developer_guide/voice_connect_overview.htm
-    var readable = [];
     const cIdMap = new Map(JSON.parse(contactIdsPayloadMap));
-    let i = 0;
     SCVLoggingUtil.debug({
       category: "sfRestApi.uploadTranscript",
       message: `Send uploadTranscript for contactIdsPayloadMap  size ${cIdMap.size}`,
     });
-    for (const entry of cIdMap.entries()) {
-      readable[i] = Readable.from(entry[1]);
-      formData.append(entry[0], readable[i], { filename: "transcripts.txt" });
-      i++;
-    }
+    // FormData can only be sent once, so build a new one for each attempt (the 401 retry in sendRequest).
+    // All of them share one boundary so the Content-Type header below matches every body.
+    const boundary = new FormData().getBoundary();
+    const buildFormData = () => {
+      const formData = new FormData();
+      formData.setBoundary(boundary);
+      //filename required for multipart upload
+      //https://developer.salesforce.com/docs/atlas.en-us.248.0.voice_developer_guide.meta/voice_developer_guide/voice_connect_overview.htm
+      for (const [conversationId, transcript] of cIdMap.entries()) {
+        formData.append(conversationId, transcript, { filename: "transcripts.txt" });
+      }
+      return formData;
+    };
+    const headers = Object.assign(
+      {
+        Accept: "application/json",
+      },
+      buildFormData().getHeaders()
+    );
     const response = await sendRequest(
       secretName,
       accessTokenSecretName,
       "post",
       "connect/conversations/upload",
-      formData,
+      buildFormData,
       headers
     );
     SCVLoggingUtil.debug({
