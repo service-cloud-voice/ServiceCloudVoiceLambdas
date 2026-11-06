@@ -20,23 +20,23 @@ async function getTranscript(clObject, contactIdRelatedRecordMap) {
     InstanceId: clObject.CustomerMetadata.InstanceId,
   };
   const describeContactResponse = await describeContact(describeContactParams);
-  const contactInitiationTimestamp =
-    describeContactResponse.Contact.InitiationTimestamp;
+  // Contact Lens offsets are relative to the start of the recording, which begins when the agent connects
+  const connectedToAgentTimestamp =
+    describeContactResponse.Contact.AgentInfo.ConnectedToAgentTimestamp;
   SCVLoggingUtil.debug({
-    message: "Contact initiation timestamp",
+    message: "Contact connected to agent timestamp",
     context: {
-      payload: { contactInitiationTimestamp: contactInitiationTimestamp },
+      payload: { connectedToAgentTimestamp: connectedToAgentTimestamp },
     },
   });
-  const date = new Date(contactInitiationTimestamp);
+  const connectedToAgentMillis = new Date(connectedToAgentTimestamp).getTime();
   const conversationEntries = [];
   const transcripts = clObject.Transcript;
   for (let i = 0; i < transcripts.length; i++) {
     const transcript = transcripts[i];
     const id = transcript.Id;
-    const clientSentTimestamp = date.setMilliseconds(
-      date.getMilliseconds() + Number(transcript.BeginOffsetMillis)
-    );
+    const clientSentTimestamp =
+      connectedToAgentMillis + Number(transcript.BeginOffsetMillis);
     const subject =
       clObject.CustomerMetadata.ContactId +
       participantMap[transcript.ParticipantId];
@@ -97,22 +97,20 @@ async function getContactLensS3Path(bucketName, eventPayload, instanceId) {
       const describeContactResponse = await describeContact(
         describeContactParams
       );
-      if (
-        !describeContactResponse?.Contact?.AgentInfo ||
-        !describeContactResponse?.Contact?.InitiationTimestamp
-      ) {
+      if (!describeContactResponse?.Contact?.AgentInfo?.ConnectedToAgentTimestamp) {
         SCVLoggingUtil.warn({
-          message: `Skipping back-filling transcripts for contactId:${contactId} as AgentInfo or InitiationTimestamp is not available in describeContactResponse for instanceId:${instanceId}.`,
+          message: `Skipping back-filling transcripts for contactId:${contactId} as AgentInfo.ConnectedToAgentTimestamp is not available in describeContactResponse for instanceId:${instanceId}.`,
           context: { describeContactResponse },
         });
         continue; // eslint-disable-line
       }
-      const contactInitiationTimestamp =
-        describeContactResponse.Contact.InitiationTimestamp;
-      const date = new Date(contactInitiationTimestamp);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
+      // Contact Lens files are stored under the UTC date the agent connected, not the date the contact started
+      const connectedToAgentTimestamp =
+        describeContactResponse.Contact.AgentInfo.ConnectedToAgentTimestamp;
+      const date = new Date(connectedToAgentTimestamp);
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
       const prefixDate = year + "/" + month + "/" + day;
 
       const s3Params = {
