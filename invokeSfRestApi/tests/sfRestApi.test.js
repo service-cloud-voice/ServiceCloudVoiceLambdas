@@ -11,10 +11,34 @@ const secretUtils = require("../secretUtils.js");
 
 const queryEngine = require("../queryEngine.js");
 const api = require("../sfRestApi.js");
+const { Writable } = require("stream");
 
 afterEach(() => {
   jest.clearAllMocks();
 });
+
+// Reads a request body the way an HTTP client would. A stream body that never finishes resolves to
+// { incomplete: true } after a short wait instead of hanging the test.
+function readRequestBody(data) {
+  if (Buffer.isBuffer(data) || typeof data === "string") {
+    return Promise.resolve(data.toString());
+  }
+  return new Promise((resolve) => {
+    let text = "";
+    const timer = setTimeout(() => resolve({ incomplete: true, text }), 1000);
+    const sink = new Writable({
+      write(chunk, _encoding, done) {
+        text += chunk;
+        done();
+      },
+    });
+    sink.on("finish", () => {
+      clearTimeout(timer);
+      resolve(text);
+    });
+    data.pipe(sink);
+  });
+}
 
 describe("createRecord", () => {
   it("creates a record sucessfully using the api", async () => {
@@ -563,5 +587,42 @@ describe("uploadTranscript", () => {
     payload.set("faaa3a21-5990-48cd-a035-e85ca8c861ff", convTranscripts);
     const request = JSON.stringify(Array.from(payload.entries()));
     await expect(await api.uploadTranscript(request)).toEqual(responseData);
+  });
+
+  it("resends the complete multipart body when the cached access token has expired", async () => {
+    const conversationId = "faaa3a21-5990-48cd-a035-e85ca8c861ff";
+    const transcript =
+      '{"type": "conversation", "payload": {"conversationId": "faaa3a21-5990-48cd-a035-e85ca8c861ff"}}\n' +
+      '{"type": "conversationEntry", "payload": {"conversationId": "faaa3a21-5990-48cd-a035-e85ca8c861ff", "id": "4", "messageText": "Hi there"}}';
+    const request = JSON.stringify([[conversationId, transcript]]);
+    const uploadResult = {
+      conversationBulkUploadsResults: [
+        { conversationIdentifier: conversationId, errorDetail: null, status: "SUCCESS", uploadId: "5a144ac1-3774-3018-896e-ccae9c86cdfc" },
+      ],
+    };
+
+    secretUtils.getSecretConfigs.mockResolvedValue({ baseURL: "https://example.my.salesforce.com/services/data/v62.0/" });
+    utils.getAccessToken.mockResolvedValueOnce("expiredToken").mockResolvedValueOnce("refreshedToken");
+
+    const attempts = [];
+    axiosWrapper.apiEndpoint
+      .mockImplementationOnce(async ({ data, headers }) => {
+        attempts.push({ authorization: headers.Authorization, body: await readRequestBody(data) });
+        throw { response: { status: 401, data: [{ errorCode: "INVALID_SESSION_ID", message: "Session expired or invalid" }] } };
+      })
+      .mockImplementationOnce(async ({ data, headers }) => {
+        attempts.push({ authorization: headers.Authorization, body: await readRequestBody(data) });
+        return { data: uploadResult };
+      });
+
+    const result = await api.uploadTranscript(request, "secret", "accessSecret");
+
+    expect(axiosWrapper.apiEndpoint).toHaveBeenCalledTimes(2);
+    expect(attempts[0].authorization).toBe("Bearer expiredToken");
+    expect(attempts[1].authorization).toBe("Bearer refreshedToken");
+    expect(attempts[0].body).toContain(`name="${conversationId}"; filename="transcripts.txt"`);
+    expect(attempts[0].body).toContain('"messageText": "Hi there"');
+    expect(attempts[1].body).toEqual(attempts[0].body);
+    expect(result).toEqual(uploadResult);
   });
 });
